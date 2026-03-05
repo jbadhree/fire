@@ -57,8 +57,27 @@ const instanceName = config.get("instanceName") ?? "fire-vm";
 const imageFamily = config.get("imageFamily") ?? "debian-12";
 const assignExternalIp = config.getBoolean("assignExternalIp") ?? true;
 const vmServiceAccountEmail = config.get("vmServiceAccountEmail");
+const openrouterSecretName =
+  config.get("openrouterSecretName") ?? "openrouter-api-key";
 
-const metadataStartupScript = getStartupScript(config) || undefined;
+// Inject project and secret name into startup script (placeholders __PROJECT_ID__ and __OPENROUTER_SECRET_NAME__).
+let startupScriptContent = getStartupScript(config);
+if (startupScriptContent) {
+  startupScriptContent = startupScriptContent
+    .replace(/__PROJECT_ID__/g, project)
+    .replace(/__OPENROUTER_SECRET_NAME__/g, openrouterSecretName);
+}
+const metadataStartupScript = startupScriptContent || undefined;
+
+// Grant VM service account access to the OpenRouter API key in Secret Manager (secret must already exist).
+if (vmServiceAccountEmail) {
+  new gcp.secretmanager.SecretIamMember("openrouter-secret-access", {
+    project,
+    secretId: openrouterSecretName,
+    role: "roles/secretmanager.secretAccessor",
+    member: pulumi.interpolate`serviceAccount:${vmServiceAccountEmail}`,
+  });
+}
 
 const vm = new gcp.compute.Instance("vm", {
   name: instanceName,
@@ -88,7 +107,7 @@ const vm = new gcp.compute.Instance("vm", {
   metadata: {
     "pulumi-managed": "true",
   },
-  metadataStartupScript,
+  metadataStartupScript: metadataStartupScript,
   tags: ["fire-infra", "ssh"],
 });
 

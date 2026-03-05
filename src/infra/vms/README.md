@@ -10,7 +10,7 @@ Run these once on your machine (or when switching to a new service account / pro
 
 ```bash
 # 1. Authenticate as a GCP service account (no key file; uses impersonation)
-gcloud auth application-default login --impersonate-service-account=YOUR_SERVICE_ACCOUNT_EMAIL
+gcloud auth login 
 
 # 2. Ensure Pulumi CLI is up to date (macOS)
 brew update && brew upgrade pulumi
