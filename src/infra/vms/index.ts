@@ -52,31 +52,75 @@ function getStartupScript(config: pulumi.Config): string {
 const config = new pulumi.Config();
 const project = getGcpProject(config);
 const zone = config.get("gcp:zone") ?? "us-central1-a";
-const machineType = config.get("machineType") ?? "e2-micro";
+const machineType = config.get("machineType") ?? "e2-medium";
 const instanceName = config.get("instanceName") ?? "fire-vm";
 const imageFamily = config.get("imageFamily") ?? "debian-12";
 const assignExternalIp = config.getBoolean("assignExternalIp") ?? true;
 const vmServiceAccountEmail = config.get("vmServiceAccountEmail");
-const openrouterSecretName =
-  config.get("openrouterSecretName") ?? "openrouter-api-key";
+const openrouterSecretName = config.get("openrouterSecretName") ?? "openrouter-api-key";
+// Optional: Slack bot + app tokens stored in Secret Manager.
+// Leave unset to skip Slack setup. Set to enable fully-automated Slack channel.
+const slackBotSecretName = config.get("slackBotSecretName") ?? "";
+const slackAppSecretName = config.get("slackAppSecretName") ?? "";
+// Optional: name of a Secret Manager secret holding comma-separated Slack user IDs
+// allowed to DM the bot without pairing. e.g. secret value "U0AK770CMM0".
+const slackAllowedUserIdsSecretName = config.get("slackAllowedUserIdsSecretName") ?? "";
 
-// Inject project and secret name into startup script (placeholders __PROJECT_ID__ and __OPENROUTER_SECRET_NAME__).
+// Inject project and secret names into startup script placeholders.
 let startupScriptContent = getStartupScript(config);
 if (startupScriptContent) {
   startupScriptContent = startupScriptContent
     .replace(/__PROJECT_ID__/g, project)
-    .replace(/__OPENROUTER_SECRET_NAME__/g, openrouterSecretName);
+    .replace(/__OPENROUTER_SECRET_NAME__/g, openrouterSecretName)
+    .replace(/__SLACK_BOT_SECRET_NAME__/g, slackBotSecretName)
+    .replace(/__SLACK_APP_SECRET_NAME__/g, slackAppSecretName)
+    .replace(/__SLACK_ALLOWED_USER_IDS_SECRET_NAME__/g, slackAllowedUserIdsSecretName);
 }
 const metadataStartupScript = startupScriptContent || undefined;
 
-// Grant VM service account access to the OpenRouter API key in Secret Manager (secret must already exist).
-if (vmServiceAccountEmail) {
-  new gcp.secretmanager.SecretIamMember("openrouter-secret-access", {
+// Project number (needed for default compute SA).
+const projectNumber = config.get("gcp:projectNumber") ?? (() => {
+  try {
+    return execSync(`gcloud projects describe ${project} --format='value(projectNumber)'`, {
+      encoding: "utf-8",
+    }).trim();
+  } catch {
+    return "";
+  }
+})();
+
+// Grant a service account secretAccessor on a given secret.
+function grantSecretAccess(secretId: string, member: pulumi.Input<string>, name: string) {
+  return new gcp.secretmanager.SecretIamMember(name, {
     project,
-    secretId: openrouterSecretName,
+    secretId,
     role: "roles/secretmanager.secretAccessor",
-    member: pulumi.interpolate`serviceAccount:${vmServiceAccountEmail}`,
+    member,
   });
+}
+
+// Build the list of principals that need secret access.
+const vmMembers: Array<pulumi.Input<string>> = [];
+if (vmServiceAccountEmail) {
+  vmMembers.push(pulumi.interpolate`serviceAccount:${vmServiceAccountEmail}`);
+}
+if (projectNumber) {
+  vmMembers.push(`serviceAccount:${projectNumber}-compute@developer.gserviceaccount.com`);
+}
+
+// Grant each principal access to every required secret.
+const secretIamBindings: gcp.secretmanager.SecretIamMember[] = [];
+const secretNames = [
+  openrouterSecretName,
+  ...(slackBotSecretName ? [slackBotSecretName] : []),
+  ...(slackAppSecretName ? [slackAppSecretName] : []),
+  ...(slackAllowedUserIdsSecretName ? [slackAllowedUserIdsSecretName] : []),
+];
+for (const secretId of secretNames) {
+  for (const member of vmMembers) {
+    const saLabel = typeof member === "string" ? member.split("@")[0].split(":")[1] : "vm-sa";
+    secretIamBindings.push(grantSecretAccess(secretId, member, `secret-access-${secretId}-${saLabel}`));
+  }
 }
 
 const vm = new gcp.compute.Instance("vm", {
@@ -109,7 +153,7 @@ const vm = new gcp.compute.Instance("vm", {
   },
   metadataStartupScript: metadataStartupScript,
   tags: ["fire-infra", "ssh"],
-});
+}, { dependsOn: secretIamBindings });
 
 // Allow SSH (tcp/22). With external IP: from anywhere. Without: only via IAP tunnel.
 const sshSourceRanges = assignExternalIp
