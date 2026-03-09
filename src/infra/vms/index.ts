@@ -155,10 +155,8 @@ const vm = new gcp.compute.Instance("vm", {
   tags: ["fire-infra", "ssh"],
 }, { dependsOn: secretIamBindings });
 
-// Allow SSH (tcp/22). With external IP: from anywhere. Without: only via IAP tunnel.
-const sshSourceRanges = assignExternalIp
-  ? ["0.0.0.0/0"]
-  : ["35.235.240.0/20"]; // IAP CIDR for --tunnel-through-iap
+// Allow SSH (tcp/22) only via IAP tunnel — requires gcloud auth, never open to internet.
+const sshSourceRanges = ["35.235.240.0/20"]; // IAP CIDR for --tunnel-through-iap
 const stack = pulumi.getStack();
 const sshRule = new gcp.compute.Firewall("allow-ssh", {
   project,

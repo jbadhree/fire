@@ -49,6 +49,17 @@ if [ ! -f "${INITIALIZED_MARKER}" ]; then
   # Install OpenClaw globally (https://docs.openclaw.ai/install)
   npm install -g openclaw@latest
 
+  # Allow openclaw user to restart its own service without a password prompt.
+  # Scoped: only this one script, no shell access, no other commands.
+  cat > /usr/local/bin/restart-openclaw.sh << 'EOF'
+#!/bin/bash
+systemctl restart openclaw
+EOF
+  chmod +x /usr/local/bin/restart-openclaw.sh
+  echo "openclaw ALL=(root) NOPASSWD: /usr/local/bin/restart-openclaw.sh" \
+    > /etc/sudoers.d/openclaw-restart
+  chmod 0440 /etc/sudoers.d/openclaw-restart
+
   # Write systemd unit
   cat > /etc/systemd/system/openclaw.service << 'SYSTEMD'
 [Unit]
