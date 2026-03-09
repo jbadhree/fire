@@ -1,102 +1,134 @@
 <mxfile host="65bd71144e">
     <diagram id="VgEnh3zW6PMQS1tfvziV" name="Architecture">
-        <mxGraphModel dx="1074" dy="726" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="860" math="0" shadow="0">
+        <mxGraphModel dx="1160" dy="980" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="860" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
                 <mxCell id="user" value="You" style="shape=mxgraph.basic.person;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;fontStyle=1;fontColor=#000000;" parent="1" vertex="1">
-                    <mxGeometry x="50" y="260" width="60" height="80" as="geometry"/>
+                    <mxGeometry x="40" y="157.5" width="60" height="80" as="geometry"/>
                 </mxCell>
-                <mxCell id="dev" value="Developer&#10;(optional)" style="shape=mxgraph.basic.person;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#000000;fontSize=10;" parent="1" vertex="1">
-                    <mxGeometry x="50" y="480" width="60" height="80" as="geometry"/>
+                <mxCell id="dev" value="You As a&#10;Developer" style="shape=mxgraph.basic.person;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#000000;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="335" width="60" height="80" as="geometry"/>
                 </mxCell>
                 <mxCell id="slack" value="Slack" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4a154b;fontColor=#ffffff;strokeColor=#4a154b;fontSize=14;fontStyle=1;" parent="1" vertex="1">
-                    <mxGeometry x="180" y="270" width="130" height="55" as="geometry"/>
+                    <mxGeometry x="180" y="170" width="130" height="55" as="geometry"/>
                 </mxCell>
-                <mxCell id="gcp" value="Google Cloud Platform" style="rounded=1;arcSize=2;fillColor=#e8f4fd;strokeColor=#1a73e8;dashed=1;verticalAlign=top;fontSize=15;fontStyle=1;strokeWidth=2;spacingTop=5;fontColor=#000000;" parent="1" vertex="1">
-                    <mxGeometry x="360" y="40" width="710" height="620" as="geometry"/>
+                <mxCell id="gcp" value="Google Cloud Platform" style="rounded=1;arcSize=2;fillColor=#212324;strokeColor=#1a73e8;dashed=1;verticalAlign=top;fontSize=15;fontStyle=1;strokeWidth=2;spacingTop=5;fontColor=#FFFFFF;" parent="1" vertex="1">
+                    <mxGeometry x="350" y="35" width="430" height="725" as="geometry"/>
                 </mxCell>
-                <mxCell id="vm" value="Compute Engine VM (e2-medium · Debian 12)" style="rounded=1;arcSize=3;fillColor=#fff2cc;strokeColor=#d6b656;verticalAlign=top;fontSize=12;fontStyle=1;spacingTop=5;fontColor=#000000;" parent="1" vertex="1">
-                    <mxGeometry x="390" y="100" width="280" height="310" as="geometry"/>
+                <mxCell id="vm" value="Compute Engine VM (e2-medium · Debian 12)" style="rounded=1;arcSize=3;fillColor=#757060;strokeColor=#d6b656;verticalAlign=top;fontSize=12;fontStyle=1;spacingTop=5;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="390" y="100" width="280" height="330" as="geometry"/>
                 </mxCell>
                 <mxCell id="openclaw" value="OpenClaw Gateway&#10;port 18789 · systemd service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;fontColor=#000000;" parent="1" vertex="1">
-                    <mxGeometry x="415" y="155" width="230" height="55" as="geometry"/>
+                    <mxGeometry x="415" y="140" width="230" height="55" as="geometry"/>
                 </mxCell>
                 <mxCell id="startup" value="Startup Script&#10;runs on every boot" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;fontColor=#000000;" parent="1" vertex="1">
-                    <mxGeometry x="415" y="240" width="230" height="55" as="geometry"/>
+                    <mxGeometry x="415" y="225" width="230" height="55" as="geometry"/>
                 </mxCell>
-                <mxCell id="config" value="openclaw.json (persisted on disk)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontColor=#000000;fontSize=10;" parent="1" vertex="1">
-                    <mxGeometry x="415" y="325" width="230" height="40" as="geometry"/>
+                <mxCell id="config" value="openclaw.json &lt;br&gt;(persisted on disk)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontColor=#000000;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="415" y="300" width="230" height="40" as="geometry"/>
                 </mxCell>
-                <mxCell id="iap" value="Identity-Aware Proxy (IAP)&#10;SSH only · 35.235.240.0/20 → tcp:22" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;fontColor=#000000;" parent="1" vertex="1">
-                    <mxGeometry x="400" y="480" width="270" height="50" as="geometry"/>
+                <mxCell id="iap" value="gcloud cli&amp;nbsp;&lt;br&gt;Identity-Aware Proxy (IAP)&lt;br&gt;SSH only · 35.235.240.0/20 → tcp:22" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="145" y="500" width="180" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="3" value="" style="edgeStyle=elbowEdgeStyle;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="sm" target="startup">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="760" y="390"/>
+                        </Array>
+                    </mxGeometry>
                 </mxCell>
                 <mxCell id="sm" value="Secret Manager" style="rounded=1;arcSize=3;fillColor=#fce4ec;strokeColor=#c62828;verticalAlign=top;fontSize=12;fontStyle=1;spacingTop=5;fontColor=#000000;" parent="1" vertex="1">
-                    <mxGeometry x="720" y="100" width="310" height="310" as="geometry"/>
+                    <mxGeometry x="400" y="590" width="310" height="120" as="geometry"/>
                 </mxCell>
-                <mxCell id="sec1" value="openrouter-api-key" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;fontColor=#000000;" parent="1" vertex="1">
-                    <mxGeometry x="740" y="155" width="270" height="38" as="geometry"/>
-                </mxCell>
-                <mxCell id="sec2" value="slack-bot-token" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;fontColor=#000000;" parent="1" vertex="1">
-                    <mxGeometry x="740" y="208" width="270" height="38" as="geometry"/>
-                </mxCell>
-                <mxCell id="sec3" value="slack-app-token" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;fontColor=#000000;" parent="1" vertex="1">
-                    <mxGeometry x="740" y="261" width="270" height="38" as="geometry"/>
-                </mxCell>
-                <mxCell id="sec4" value="slack-allowed-user-ids" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;fontColor=#000000;" parent="1" vertex="1">
-                    <mxGeometry x="740" y="314" width="270" height="38" as="geometry"/>
+                <mxCell id="sec1" value="openrouter-api-key&lt;br&gt;slack-bot-token&lt;br&gt;slack-app-token&lt;br&gt;slack-allowed-user-ids" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="420" y="621" width="270" height="70" as="geometry"/>
                 </mxCell>
                 <mxCell id="openrouter" value="OpenRouter API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontStyle=1;fontColor=#000000;" parent="1" vertex="1">
-                    <mxGeometry x="1120" y="175" width="160" height="55" as="geometry"/>
+                    <mxGeometry x="900" y="140" width="160" height="55" as="geometry"/>
                 </mxCell>
                 <mxCell id="models" value="AI Models&#10;Claude · GPT-4 · Gemini…" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontColor=#000000;" parent="1" vertex="1">
-                    <mxGeometry x="1120" y="295" width="160" height="55" as="geometry"/>
+                    <mxGeometry x="900" y="310" width="160" height="55" as="geometry"/>
                 </mxCell>
                 <mxCell id="pulumi" value="Pulumi (TypeScript)&#10;provisions all GCP resources" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e6e0f7;strokeColor=#7b52ab;fontSize=10;fontColor=#000000;" parent="1" vertex="1">
-                    <mxGeometry x="180" y="480" width="160" height="50" as="geometry"/>
+                    <mxGeometry x="165" y="350" width="160" height="50" as="geometry"/>
                 </mxCell>
-                <mxCell id="e1" value="DM" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;fontStyle=1;" parent="1" source="user" target="slack" edge="1">
+                <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;fontStyle=1;" parent="1" source="user" target="slack" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="e2" value="Socket Mode&#10;(outbound, no open ports)" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;" parent="1" source="slack" target="openclaw" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e3" value="fetch secrets on boot" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;dashed=1;" parent="1" source="startup" target="sm" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e4" value="write config &amp; restart" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;dashed=1;" parent="1" source="startup" target="openclaw" edge="1">
-                    <mxGeometry relative="1" as="geometry">
-                        <Array as="points">
-                            <mxPoint x="400" y="262"/>
-                            <mxPoint x="400" y="182"/>
-                        </Array>
-                    </mxGeometry>
-                </mxCell>
-                <mxCell id="e5" value="API calls" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;" parent="1" source="openclaw" edge="1">
-                    <mxGeometry relative="1" as="geometry">
-                        <Array as="points">
-                            <mxPoint x="645" y="75"/>
-                            <mxPoint x="1190" y="75"/>
-                        </Array>
-                        <mxPoint x="1190" y="170" as="targetPoint"/>
-                    </mxGeometry>
-                </mxCell>
-                <mxCell id="e6" value="routes to" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;" parent="1" source="openrouter" target="models" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e7" value="pulumi up" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;dashed=1;strokeColor=#7b52ab;" parent="1" source="dev" target="pulumi" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e8" value="provisions" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;dashed=1;strokeColor=#7b52ab;" parent="1" source="pulumi" target="gcp" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e9" value="gcloud SSH&#10;--tunnel-through-iap" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;dashed=1;strokeColor=#9673a6;" parent="1" source="dev" target="iap" edge="1">
-                    <mxGeometry x="0.2785" y="-35" relative="1" as="geometry">
+                <mxCell id="e6" value="" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;" parent="1" source="openrouter" target="models" edge="1">
+                    <mxGeometry x="-0.0062" relative="1" as="geometry">
                         <mxPoint as="offset"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="e10" value="" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;strokeColor=#9673a6;" parent="1" source="iap" target="vm" edge="1">
+                <mxCell id="e7" value="" style="edgeStyle=orthogonalEdgeStyle;html=1;fontSize=10;strokeColor=#FFFFFF;" parent="1" source="dev" target="pulumi" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e10" value="" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#9673a6;" parent="1" source="iap" target="vm" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="5" value="" style="endArrow=classic;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.071;entryY=0.29;entryDx=0;entryDy=0;entryPerimeter=0;edgeStyle=elbowEdgeStyle;" edge="1" parent="1" source="slack" target="vm">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="840" y="390" as="sourcePoint"/>
+                        <mxPoint x="890" y="340" as="targetPoint"/>
+                        <Array as="points">
+                            <mxPoint x="340" y="250"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="6" value="" style="endArrow=classic;html=1;fontColor=#FFFFFF;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.003;entryY=0.832;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="pulumi" target="vm">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="500" y="390" as="sourcePoint"/>
+                        <mxPoint x="550" y="340" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="7" style="edgeStyle=elbowEdgeStyle;html=1;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0.75;entryY=0;entryDx=0;entryDy=0;fontColor=#FFFFFF;" edge="1" parent="1" source="config" target="config">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="8" value="OpenClaaw Data&lt;br&gt;(persisted on disk)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontColor=#000000;fontSize=10;" vertex="1" parent="1">
+                    <mxGeometry x="415" y="365" width="230" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="9" value="" style="endArrow=classic;html=1;fontColor=#FFFFFF;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="startup" target="config">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="500" y="380" as="sourcePoint"/>
+                        <mxPoint x="550" y="330" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="11" value="" style="endArrow=classic;html=1;fontColor=#FFFFFF;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" edge="1" parent="1" source="startup">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="500" y="380" as="sourcePoint"/>
+                        <mxPoint x="530" y="190" as="targetPoint"/>
+                        <Array as="points">
+                            <mxPoint x="530" y="190"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="14" value="" style="endArrow=classic;html=1;strokeColor=#FFFFFF;fontColor=#FFFFFF;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="dev" target="iap">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="500" y="380" as="sourcePoint"/>
+                        <mxPoint x="550" y="330" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="15" value="" style="endArrow=classic;html=1;strokeColor=#FFFFFF;fontColor=#FFFFFF;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="dev" target="16">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="500" y="380" as="sourcePoint"/>
+                        <mxPoint x="40" y="680" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="16" value="gcloud cli" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;fontColor=#000000;" vertex="1" parent="1">
+                    <mxGeometry x="192.5" y="630.5" width="105" height="39" as="geometry"/>
+                </mxCell>
+                <mxCell id="17" value="" style="endArrow=classic;html=1;strokeColor=#FFFFFF;fontColor=#FFFFFF;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="16" target="sm">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="500" y="380" as="sourcePoint"/>
+                        <mxPoint x="550" y="330" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="18" value="" style="endArrow=classic;html=1;strokeColor=#FFFFFF;fontColor=#FFFFFF;exitX=1;exitY=0.5;exitDx=0;exitDy=0;edgeStyle=elbowEdgeStyle;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="openclaw" target="openrouter">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="500" y="380" as="sourcePoint"/>
+                        <mxPoint x="980" y="170" as="targetPoint"/>
+                    </mxGeometry>
                 </mxCell>
             </root>
         </mxGraphModel>
