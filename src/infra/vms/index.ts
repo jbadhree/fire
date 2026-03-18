@@ -65,8 +65,14 @@ const slackAppSecretName = config.get("slackAppSecretName") ?? "";
 // Optional: name of a Secret Manager secret holding comma-separated Slack user IDs
 // allowed to DM the bot without pairing. e.g. secret value "U0AK770CMM0".
 const slackAllowedUserIdsSecretName = config.get("slackAllowedUserIdsSecretName") ?? "";
+// Tailscale auth key secret — allows the VM to join the tailnet automatically on boot.
+const tailscaleAuthKeySecretName = config.get("tailscaleAuthKeySecretName") ?? "tailscale-auth-key";
+// code-server (VS Code in browser) password secret.
+const codeServerPasswordSecretName = config.get("codeServerPasswordSecretName") ?? "code-server-password";
+// GCS bucket name for persistent OpenClaw data (config, memory, logs) via gcsfuse.
+const gcsBucketName = config.get("gcsBucketName") ?? "openclaw-data";
 
-// Inject project and secret names into startup script placeholders.
+// Inject project, secret names, and bucket name into startup script placeholders.
 let startupScriptContent = getStartupScript(config);
 if (startupScriptContent) {
   startupScriptContent = startupScriptContent
@@ -74,7 +80,10 @@ if (startupScriptContent) {
     .replace(/__OPENROUTER_SECRET_NAME__/g, openrouterSecretName)
     .replace(/__SLACK_BOT_SECRET_NAME__/g, slackBotSecretName)
     .replace(/__SLACK_APP_SECRET_NAME__/g, slackAppSecretName)
-    .replace(/__SLACK_ALLOWED_USER_IDS_SECRET_NAME__/g, slackAllowedUserIdsSecretName);
+    .replace(/__SLACK_ALLOWED_USER_IDS_SECRET_NAME__/g, slackAllowedUserIdsSecretName)
+    .replace(/__TAILSCALE_AUTH_KEY_SECRET_NAME__/g, tailscaleAuthKeySecretName)
+    .replace(/__CODE_SERVER_PASSWORD_SECRET_NAME__/g, codeServerPasswordSecretName)
+    .replace(/__GCS_BUCKET_NAME__/g, gcsBucketName);
 }
 const metadataStartupScript = startupScriptContent || undefined;
 
@@ -108,6 +117,20 @@ if (projectNumber) {
   vmMembers.push(`serviceAccount:${projectNumber}-compute@developer.gserviceaccount.com`);
 }
 
+// GCS bucket is managed outside Pulumi (created once manually) so pulumi destroy never
+// touches it and pulumi up never conflicts with an existing bucket. Pulumi only manages
+// the IAM bindings on it, which are idempotent.
+// Create once: gcloud storage buckets create gs://<name> --project=<project> --location=US
+const bucketIamBindings: gcp.storage.BucketIAMMember[] = [];
+for (const member of vmMembers) {
+  const saLabel = typeof member === "string" ? member.split("@")[0].split(":")[1] : "vm-sa";
+  bucketIamBindings.push(new gcp.storage.BucketIAMMember(`bucket-access-${saLabel}`, {
+    bucket: gcsBucketName,
+    role: "roles/storage.objectAdmin",
+    member,
+  }));
+}
+
 // Grant each principal access to every required secret.
 const secretIamBindings: gcp.secretmanager.SecretIamMember[] = [];
 const secretNames = [
@@ -115,6 +138,8 @@ const secretNames = [
   ...(slackBotSecretName ? [slackBotSecretName] : []),
   ...(slackAppSecretName ? [slackAppSecretName] : []),
   ...(slackAllowedUserIdsSecretName ? [slackAllowedUserIdsSecretName] : []),
+  tailscaleAuthKeySecretName,
+  codeServerPasswordSecretName,
 ];
 for (const secretId of secretNames) {
   for (const member of vmMembers) {
@@ -153,7 +178,7 @@ const vm = new gcp.compute.Instance("vm", {
   },
   metadataStartupScript: metadataStartupScript,
   tags: ["fire-infra", "ssh"],
-}, { dependsOn: secretIamBindings });
+}, { dependsOn: [...secretIamBindings, ...bucketIamBindings] });
 
 // Allow SSH (tcp/22) only via IAP tunnel — requires gcloud auth, never open to internet.
 const sshSourceRanges = ["35.235.240.0/20"]; // IAP CIDR for --tunnel-through-iap
@@ -175,3 +200,4 @@ export const externalIp = vm.networkInterfaces.apply(
     nics[0]?.accessConfigs?.[0]?.natIp ?? ""
 );
 export const selfLink = vm.selfLink;
+export const bucketName = gcsBucketName;

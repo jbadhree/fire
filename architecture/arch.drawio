@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="VgEnh3zW6PMQS1tfvziV" name="Architecture">
-        <mxGraphModel dx="1160" dy="980" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="860" math="0" shadow="0">
+        <mxGraphModel dx="1052" dy="686" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="860" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -31,7 +31,7 @@
                 <mxCell id="iap" value="gcloud cli&amp;nbsp;&lt;br&gt;Identity-Aware Proxy (IAP)&lt;br&gt;SSH only · 35.235.240.0/20 → tcp:22" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;fontColor=#000000;" parent="1" vertex="1">
                     <mxGeometry x="145" y="500" width="180" height="50" as="geometry"/>
                 </mxCell>
-                <mxCell id="3" value="" style="edgeStyle=elbowEdgeStyle;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="sm" target="startup">
+                <mxCell id="3" value="" style="edgeStyle=elbowEdgeStyle;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="sm" target="startup" edge="1">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
                             <mxPoint x="760" y="390"/>
@@ -67,7 +67,7 @@
                 <mxCell id="e10" value="" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#9673a6;" parent="1" source="iap" target="vm" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="5" value="" style="endArrow=classic;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.071;entryY=0.29;entryDx=0;entryDy=0;entryPerimeter=0;edgeStyle=elbowEdgeStyle;" edge="1" parent="1" source="slack" target="vm">
+                <mxCell id="5" value="" style="endArrow=classic;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.071;entryY=0.29;entryDx=0;entryDy=0;entryPerimeter=0;edgeStyle=elbowEdgeStyle;" parent="1" source="slack" target="vm" edge="1">
                     <mxGeometry width="50" height="50" relative="1" as="geometry">
                         <mxPoint x="840" y="390" as="sourcePoint"/>
                         <mxPoint x="890" y="340" as="targetPoint"/>
@@ -76,25 +76,25 @@
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="6" value="" style="endArrow=classic;html=1;fontColor=#FFFFFF;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.003;entryY=0.832;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="pulumi" target="vm">
+                <mxCell id="6" value="" style="endArrow=classic;html=1;fontColor=#FFFFFF;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.003;entryY=0.832;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="pulumi" target="vm" edge="1">
                     <mxGeometry width="50" height="50" relative="1" as="geometry">
                         <mxPoint x="500" y="390" as="sourcePoint"/>
                         <mxPoint x="550" y="340" as="targetPoint"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="7" style="edgeStyle=elbowEdgeStyle;html=1;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0.75;entryY=0;entryDx=0;entryDy=0;fontColor=#FFFFFF;" edge="1" parent="1" source="config" target="config">
+                <mxCell id="7" style="edgeStyle=elbowEdgeStyle;html=1;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0.75;entryY=0;entryDx=0;entryDy=0;fontColor=#FFFFFF;" parent="1" source="config" target="config" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="8" value="OpenClaaw Data&lt;br&gt;(persisted on disk)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontColor=#000000;fontSize=10;" vertex="1" parent="1">
+                <mxCell id="8" value="OpenClaaw Data&lt;br&gt;(persisted on disk)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontColor=#000000;fontSize=10;" parent="1" vertex="1">
                     <mxGeometry x="415" y="365" width="230" height="40" as="geometry"/>
                 </mxCell>
-                <mxCell id="9" value="" style="endArrow=classic;html=1;fontColor=#FFFFFF;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="startup" target="config">
+                <mxCell id="9" value="" style="endArrow=classic;html=1;fontColor=#FFFFFF;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="startup" target="config" edge="1">
                     <mxGeometry width="50" height="50" relative="1" as="geometry">
                         <mxPoint x="500" y="380" as="sourcePoint"/>
                         <mxPoint x="550" y="330" as="targetPoint"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="11" value="" style="endArrow=classic;html=1;fontColor=#FFFFFF;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" edge="1" parent="1" source="startup">
+                <mxCell id="11" value="" style="endArrow=classic;html=1;fontColor=#FFFFFF;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" parent="1" source="startup" edge="1">
                     <mxGeometry width="50" height="50" relative="1" as="geometry">
                         <mxPoint x="500" y="380" as="sourcePoint"/>
                         <mxPoint x="530" y="190" as="targetPoint"/>
@@ -103,28 +103,28 @@
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="14" value="" style="endArrow=classic;html=1;strokeColor=#FFFFFF;fontColor=#FFFFFF;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="dev" target="iap">
+                <mxCell id="14" value="" style="endArrow=classic;html=1;strokeColor=#FFFFFF;fontColor=#FFFFFF;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;edgeStyle=orthogonalEdgeStyle;" parent="1" source="dev" target="iap" edge="1">
                     <mxGeometry width="50" height="50" relative="1" as="geometry">
                         <mxPoint x="500" y="380" as="sourcePoint"/>
                         <mxPoint x="550" y="330" as="targetPoint"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="15" value="" style="endArrow=classic;html=1;strokeColor=#FFFFFF;fontColor=#FFFFFF;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="dev" target="16">
+                <mxCell id="15" value="" style="endArrow=classic;html=1;strokeColor=#FFFFFF;fontColor=#FFFFFF;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;edgeStyle=orthogonalEdgeStyle;" parent="1" source="dev" target="16" edge="1">
                     <mxGeometry width="50" height="50" relative="1" as="geometry">
                         <mxPoint x="500" y="380" as="sourcePoint"/>
                         <mxPoint x="40" y="680" as="targetPoint"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="16" value="gcloud cli" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;fontColor=#000000;" vertex="1" parent="1">
+                <mxCell id="16" value="gcloud cli" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;fontColor=#000000;" parent="1" vertex="1">
                     <mxGeometry x="192.5" y="630.5" width="105" height="39" as="geometry"/>
                 </mxCell>
-                <mxCell id="17" value="" style="endArrow=classic;html=1;strokeColor=#FFFFFF;fontColor=#FFFFFF;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="16" target="sm">
+                <mxCell id="17" value="" style="endArrow=classic;html=1;strokeColor=#FFFFFF;fontColor=#FFFFFF;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="16" target="sm" edge="1">
                     <mxGeometry width="50" height="50" relative="1" as="geometry">
                         <mxPoint x="500" y="380" as="sourcePoint"/>
                         <mxPoint x="550" y="330" as="targetPoint"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="18" value="" style="endArrow=classic;html=1;strokeColor=#FFFFFF;fontColor=#FFFFFF;exitX=1;exitY=0.5;exitDx=0;exitDy=0;edgeStyle=elbowEdgeStyle;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="openclaw" target="openrouter">
+                <mxCell id="18" value="" style="endArrow=classic;html=1;strokeColor=#FFFFFF;fontColor=#FFFFFF;exitX=1;exitY=0.5;exitDx=0;exitDy=0;edgeStyle=elbowEdgeStyle;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="openclaw" target="openrouter" edge="1">
                     <mxGeometry width="50" height="50" relative="1" as="geometry">
                         <mxPoint x="500" y="380" as="sourcePoint"/>
                         <mxPoint x="980" y="170" as="targetPoint"/>
