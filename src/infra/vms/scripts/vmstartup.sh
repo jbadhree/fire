@@ -85,10 +85,28 @@ SYSTEMD
   systemctl daemon-reload
   systemctl enable openclaw
 
+  # ── Clone fire-skills registry ─────────────────────────────────────────────
+  # Cloned to local disk (not GCS mount) so git operations are fast and reliable.
+  # Public repo — no auth needed.
+  log "Cloning fire-skills registry..."
+  sudo -u "${OPENCLAW_USER}" git clone \
+    https://github.com/jbadhree/fire-skills.git \
+    "${OPENCLAW_HOME}/fire-skills"
+  log "fire-skills cloned."
+
   touch "${INITIALIZED_MARKER}"
   log "First-boot install complete."
 else
   log "Already initialized — skipping package/Node/OpenClaw install."
+fi
+
+# ── Pull latest fire-skills (runs on every boot) ─────────────────────────────
+# Failure is non-fatal: a stale clone is better than a broken boot.
+log "Pulling latest fire-skills..."
+if sudo -u "${OPENCLAW_USER}" git -C "${OPENCLAW_HOME}/fire-skills" pull --ff-only; then
+  log "fire-skills up to date."
+else
+  log "WARNING: git pull failed — continuing with existing skills."
 fi
 
 # ── Fetch secrets and write config (runs on every boot) ─────────────────────
@@ -168,6 +186,13 @@ config.setdefault("gateway", {})["mode"] = "local"
 config.setdefault("env", {})["OPENROUTER_API_KEY"] = openrouter_key
 config.setdefault("agents", {}).setdefault("defaults", {}).setdefault("model", {})["primary"] = \
     "openrouter/anthropic/claude-sonnet-4-5"
+
+# Wire the fire-skills registry into the skills loader.
+# Only appends if not already present so user-added extraDirs are preserved.
+fire_skills_dir = "/var/lib/openclaw/fire-skills/skills"
+extra_dirs = config.setdefault("skills", {}).setdefault("load", {}).setdefault("extraDirs", [])
+if fire_skills_dir not in extra_dirs:
+    extra_dirs.append(fire_skills_dir)
 
 if slack_bot_token and slack_app_token:
     slack_cfg = config.setdefault("channels", {}).setdefault("slack", {})
