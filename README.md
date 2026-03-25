@@ -4,7 +4,7 @@ Run [OpenClaw](https://docs.openclaw.ai) — an open-source personal AI assistan
 
 Two deployment modes:
 - **Desktop VM** (`fire-desktop`) — Ubuntu desktop accessible via **Chrome Remote Desktop** from any device (Mac, iPhone, iPad, Android). OpenClaw runs inside it. All data persists on GCS.
-- **Server VM** (`fire-vm`) — Headless VM, chat via **Slack** from anywhere. See [docs/server-vm.md](docs/server-vm.md).
+- **Server VM** (`fire-vm`) — Headless VM, chat via **Slack** from anywhere. See [Server VM setup](#server-vm-headless-slack-only).
 
 ---
 
@@ -37,8 +37,6 @@ src/
     storage/        ← GCS bucket for persistent data
     vm-desktop/     ← Ubuntu desktop VM with Chrome Remote Desktop
     vm-server/      ← Headless server VM (Slack only)
-docs/
-  server-vm.md      ← Setup guide for the server VM
 ```
 
 ---
@@ -357,13 +355,63 @@ Then redeploy: `pulumi destroy -y --cwd src/infra/vm-desktop && pulumi up -y --c
 
 ---
 
+## Server VM (headless, Slack only)
+
+The server VM is identical to the desktop setup but lighter (`e2-medium` is enough) with no desktop or CRD. Skip Steps 8-9 (CRD setup) and skip the `desktop-user-password` secret.
+
+Edit `src/infra/vm-server/Pulumi.dev.yaml`:
+
+```yaml
+config:
+  gcp:project: YOUR_PROJECT_ID
+  gcp:zone: us-central1-a
+
+  fire-infra:machineType: e2-medium
+  fire-infra:diskSizeGb: "20"
+  fire-infra:instanceName: fire-vm
+  fire-infra:imageFamily: ubuntu-2204-lts
+  fire-infra:imageProject: ubuntu-os-cloud
+  fire-infra:assignExternalIp: "true"
+  fire-infra:startupScriptPath: scripts/vmstartup.sh
+  fire-infra:vmServiceAccountEmail: fire-provisioner@YOUR_PROJECT_ID.iam.gserviceaccount.com
+
+  fire-infra:openrouterSecretName: openrouter-api-key
+  fire-infra:slackBotSecretName: slack-bot-token
+  fire-infra:slackAppSecretName: slack-app-token
+  fire-infra:slackAllowedUserIdsSecretName: slack-allowed-user-ids
+
+  fire-infra:skillsRepoUrl: https://github.com/jbadhree/fire-skills.git
+  fire-infra:nodeMajorVersion: "22"
+  fire-infra:openclawVersion: 2026.3.13
+
+  fire-infra:gcsBucketName: YOUR_BUCKET_NAME
+```
+
+```bash
+pulumi stack init dev --cwd src/infra/vm-server
+pulumi up -y --cwd src/infra/vm-server
+```
+
+Monitor first boot (~5-10 min):
+```bash
+gcloud compute instances get-serial-port-output fire-vm \
+  --zone=us-central1-a --project=YOUR_PROJECT_ID
+```
+
+Wait for `Startup script finished.` then DM your Slack bot to verify.
+
+> **Note:** Don't run both VMs at the same time with the same Slack tokens — both will respond to every message.
+
+---
+
 ## Teardown
 
 Destroy in this order — VM first, then storage, then setup:
 
 ```bash
 # 1. Delete the VM (safe — GCS data is unaffected)
-pulumi destroy -y --cwd src/infra/vm-desktop
+pulumi destroy -y --cwd src/infra/vm-desktop   # desktop VM
+# pulumi destroy -y --cwd src/infra/vm-server  # or server VM
 
 # 2. Delete the GCS bucket and ALL its data (OpenClaw config, memory, CRD auth)
 pulumi destroy -y --cwd src/infra/storage
