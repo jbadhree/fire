@@ -1,66 +1,134 @@
 # fire
 
-Run [OpenClaw](https://docs.openclaw.ai) — an open-source personal AI assistant — on a **GCP Compute Engine VM**, fully automated with Pulumi. Chat via **Slack** from anywhere with no SSH needed day-to-day.
+Run [OpenClaw](https://docs.openclaw.ai) — an open-source personal AI assistant — on a **GCP Compute Engine VM**, fully automated with Pulumi.
+
+Two deployment modes:
+- **Desktop VM** (`fire-desktop`) — Ubuntu desktop you remote into via **Chrome Remote Desktop**, with OpenClaw running inside it. Access from any device (Mac, iPhone, iPad, Android) using your Google account. All data persists on GCS.
+- **Server VM** (`fire-vm`) — Headless VM, chat via **Slack** from anywhere with no SSH needed.
 
 ---
 
-## What this repo does
-
-- Provisions a Debian VM on Google Cloud using **Pulumi** (TypeScript)
-- A startup script runs on every boot with two phases:
-  - **First boot only (~5 min):** installs Node.js 22 and OpenClaw, creates the system user, and registers the systemd service
-  - **Every boot (~10 sec):** fetches your **OpenRouter API key** and **Slack tokens** from GCP Secret Manager, merges them into the config, and (re)starts the gateway
-- You chat with OpenClaw by **DMing your Slack bot** — no SSH tunnel needed
-- **Stop/start the VM** from GCP Console anytime; everything comes back up automatically in ~30 seconds
-
----
-
-## How it works
+## Architecture
 
 ```
-You (Slack) ──DM──▶ Slack API ──Socket Mode──▶ GCP VM (OpenClaw gateway)
-                                                      │
-                                               OpenRouter API
-                                               (routes to Claude, GPT, etc.)
-```
+┌─────────────────────────────────────────────────────────┐
+│  fire-desktop (Ubuntu 22.04, Cinnamon desktop)          │
+│                                                         │
+│  Chrome Remote Desktop ◀── remotedesktop.google.com    │
+│                                                         │
+│  OpenClaw gateway (port 18789)                          │
+│    ├── config + memory → GCS bucket (.openclaw/)        │
+│    ├── skills          → ~/fire-skills/ (GitHub)        │
+│    └── Slack           → Socket Mode (outbound only)    │
+└─────────────────────────────────────────────────────────┘
 
-- **OpenClaw** is the AI assistant runtime. It manages conversations, memory, channels, and agents.
-- **OpenRouter** is the model provider. It gives you access to Claude, GPT-4, Gemini, and hundreds of other models through one API key. You pay per token with no subscription.
-- **Slack** is the chat interface. OpenClaw connects to Slack via Socket Mode (outbound from the VM — no inbound ports exposed to the internet).
-- **GCP Secret Manager** stores all credentials (OpenRouter key, Slack tokens). Nothing sensitive lives in code or config files.
+┌─────────────────────────────────────────────────────────┐
+│  fire-vm (server, headless)                             │
+│                                                         │
+│  OpenClaw gateway (port 18789)                          │
+│    └── Slack ──▶ Slack API ──▶ OpenRouter ──▶ Claude   │
+└─────────────────────────────────────────────────────────┘
+
+Both VMs read credentials from GCP Secret Manager.
+OpenClaw skills are loaded from a public GitHub repo (fire-skills).
+```
 
 ---
 
 ## Repo layout
 
-| Path | Purpose |
-|------|---------|
-| `src/infra/vms/index.ts` | Pulumi stack: VM, firewall, Secret Manager IAM |
-| `src/infra/vms/scripts/vmstartup.sh` | Startup script: install, configure, start OpenClaw |
-| `Pulumi.dev.yaml` | Stack config (gitignored — never committed) |
+```
+src/
+  infra/
+    setup/                         ← run this first (one-time bootstrap)
+      Pulumi.yaml                  Project definition
+      Pulumi.dev.yaml              Stack config (gitignored)
+      index.ts                     Enables APIs, creates SA, grants IAM roles
+    storage/
+      Pulumi.yaml                  GCS bucket Pulumi program definition
+      Pulumi.dev.yaml              Stack config (gitignored)
+      index.ts                     Pulumi: GCS bucket + versioning
+    vm-desktop/
+      Pulumi.yaml                  Desktop VM Pulumi program definition
+      Pulumi.dev.yaml              Stack config (gitignored)
+      index.ts                     Pulumi: VM, IAM bindings, firewall
+      scripts/
+        vmdesktop-startup.sh       Startup script: install, configure, start
+    vm-server/
+      Pulumi.yaml                  Server VM Pulumi program definition
+      Pulumi.dev.yaml              Stack config (gitignored)
+      index.ts                     Pulumi: VM, IAM bindings, firewall
+      scripts/
+        vmstartup.sh               Startup script: install, configure, start
+  skills/                          Git submodule → fire-skills repo
+docs/
+  server-vm.md                     Setup guide for the headless server VM
+```
 
 ---
 
 ## Prerequisites
 
-### 1. OpenRouter account (free to sign up)
+### 1. Tools
 
-OpenRouter is an API aggregator — you get one key that routes to any AI model.
+Install on your local machine:
+
+```bash
+# macOS
+brew install --cask google-cloud-sdk
+brew install pulumi
+brew install node
+
+# Verify
+gcloud version
+pulumi version
+node --version
+```
+
+### 2. GCP account and project
+
+These are the **only two manual steps** in GCP — everything else is automated by the `setup` Pulumi program below.
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) and create an account
+2. Create a new project (note your `PROJECT_ID`)
+3. **Enable billing** on the project (required for Compute Engine — [instructions](https://cloud.google.com/billing/docs/how-to/modify-project))
+
+Then authenticate your local machine:
+```bash
+gcloud auth login
+gcloud auth application-default login
+gcloud config set project YOUR_PROJECT_ID
+```
+
+**Run the setup program** — this enables all required APIs, creates the provisioner service account, and grants it the roles it needs:
+
+```bash
+# Edit src/infra/setup/Pulumi.dev.yaml and set gcp:project: YOUR_PROJECT_ID
+npm install
+pulumi stack init dev --cwd src/infra/setup
+pulumi up -y --cwd src/infra/setup
+```
+
+It enables these APIs: `compute`, `secretmanager`, `iam`, `iamcredentials`, `storage`, `cloudresourcemanager`, `iap`, `oslogin`.
+
+It creates a service account `fire-provisioner@YOUR_PROJECT_ID.iam.gserviceaccount.com` with roles: `compute.admin`, `secretmanager.admin`, `storage.admin`, `iam.serviceAccountUser`, `browser`.
+
+Copy the `serviceAccountEmail` output — you'll paste it into each program's `Pulumi.dev.yaml` as `vmServiceAccountEmail`.
+
+### 3. OpenRouter account
+
+OpenRouter is an API aggregator — one key routes to Claude, GPT-4, Gemini, and hundreds of other models.
 
 1. Sign up at [openrouter.ai](https://openrouter.ai) (free)
-2. Go to **Keys** → **Create Key**
-3. Copy the key (starts with `sk-or-v1-...`)
-4. Add credits (pay-as-you-go; Claude Sonnet costs ~$0.003/message)
+2. Go to **Keys** → **Create Key** → copy the key (starts with `sk-or-v1-...`)
+3. Add credits (pay-as-you-go; Claude Sonnet ~$0.003/message)
 
-### 2. Slack workspace (free plan works)
+### 4. Slack workspace and app
 
-You need a Slack workspace to create a bot. The free plan is sufficient.
+**Create a workspace** (skip if you already have one):
+1. Go to [slack.com](https://slack.com) → **Create a new workspace** (free plan works)
 
-**If you don't have a workspace:**
-1. Go to [slack.com](https://slack.com) → **Create a new workspace** (free)
-2. Follow the prompts — takes 2 minutes
-
-**Create a Slack app:**
+**Create the Slack app:**
 1. Go to [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From a manifest**
 2. Select your workspace
 3. Paste this manifest:
@@ -97,235 +165,315 @@ You need a Slack workspace to create a bot. The free plan is sufficient.
 ```
 
 4. Click **Next** → **Create**
-5. Go to **OAuth & Permissions** → **Install to Workspace** → **Allow** → copy the **Bot Token** (`xoxb-...`)
-6. Go to **Settings → Basic Information → App-Level Tokens** → **Generate Token and Scopes** → add scope `connections:write` → copy the **App Token** (`xapp-...`)
-7. Go to **Settings → Socket Mode** → enable it
-8. Find your Slack user ID: click your profile picture → **Profile** → **⋮** → **Copy member ID** (starts with `U...`)
+5. **OAuth & Permissions** → **Install to Workspace** → **Allow** → copy the **Bot Token** (`xoxb-...`)
+6. **Settings → Basic Information → App-Level Tokens** → **Generate Token and Scopes** → add scope `connections:write` → copy the **App Token** (`xapp-...`)
+7. **Settings → Socket Mode** → enable it
 
-### 3. GCP account and project
+**Find your Slack user ID** (to allow yourself to DM the bot):
+- Click your profile picture → **Profile** → **⋮** → **Copy member ID** (starts with `U...`)
+- For multiple users: `U111AAA,U222BBB,U333CCC` (comma-separated)
 
-1. Go to [console.cloud.google.com](https://console.cloud.google.com) — create an account and a project if you don't have one
-2. Enable billing on the project (required for Compute Engine)
-3. Install the gcloud CLI and Pulumi (macOS):
-   ```bash
-   brew install --cask google-cloud-sdk
-   brew install pulumi
-   ```
-4. Authenticate and point gcloud at your project:
-   ```bash
-   gcloud auth application-default login
-   gcloud config set account YOUR_EMAIL
-   gcloud config set project YOUR_PROJECT_ID
-   ```
-5. Enable the required APIs:
-   ```bash
-   gcloud services enable compute.googleapis.com secretmanager.googleapis.com iam.googleapis.com
-   ```
-6. Create a service account that Pulumi will use to provision resources:
-   ```bash
-   gcloud iam service-accounts create YOUR_SA_NAME \
-     --display-name="Pulumi provisioner" \
-     --project=YOUR_PROJECT_ID
-   ```
-   This gives you `YOUR_SA_NAME@YOUR_PROJECT_ID.iam.gserviceaccount.com` — use that as `YOUR_SA_EMAIL` everywhere below.
-7. Grant the service account the roles it needs:
-   ```bash
-   # Create and manage VMs and firewall rules
-   gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-     --member="serviceAccount:YOUR_SA_EMAIL" \
-     --role="roles/compute.admin"
+### 5. Skills repository
 
-   # Create and manage secrets
-   gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-     --member="serviceAccount:YOUR_SA_EMAIL" \
-     --role="roles/secretmanager.admin"
+OpenClaw loads skills from a public GitHub repository. The default is [jbadhree/fire-skills](https://github.com/jbadhree/fire-skills).
 
-   # Attach a service account to the VM when creating it
-   gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-     --member="serviceAccount:YOUR_SA_EMAIL" \
-     --role="roles/iam.serviceAccountUser"
-   ```
-8. Tell gcloud to use that service account for Pulumi commands:
-   ```bash
-   gcloud auth application-default login \
-     --impersonate-service-account=YOUR_SA_EMAIL
-   ```
+To use your own:
+1. Fork the repo or create a new one with the same structure
+2. Update `skillsRepoUrl` in your `Pulumi.dev.yaml` (see below)
 
 ---
 
-## Setup
+## Setup — Desktop VM (recommended)
 
-### Step 1 — Store secrets in GCP Secret Manager
+The desktop VM gives you a full Ubuntu desktop accessible from any device via Chrome Remote Desktop, with OpenClaw running inside it.
+
+### Step 1 — Create GCS bucket for persistent storage
+
+The bucket stores all OpenClaw data (config, memory, pairing) and Chrome Remote Desktop auth so it survives VM destroy/recreate.
 
 ```bash
-# OpenRouter API key
-echo -n "sk-or-v1-YOUR-KEY" | gcloud secrets create openrouter-api-key \
-  --project=YOUR_PROJECT_ID --data-file=-
+# Initialize and deploy the storage program (only once, ever)
+cd src/infra/storage
+pulumi stack init dev
+pulumi up -y --cwd src/infra/storage
+```
 
-# Slack bot token
-echo -n "xoxb-YOUR-BOT-TOKEN" | gcloud secrets create slack-bot-token \
-  --project=YOUR_PROJECT_ID --data-file=-
+Or create the bucket manually:
+```bash
+gcloud storage buckets create gs://YOUR_BUCKET_NAME \
+  --location=US --project=YOUR_PROJECT_ID
+```
 
-# Slack app token
-echo -n "xapp-YOUR-APP-TOKEN" | gcloud secrets create slack-app-token \
-  --project=YOUR_PROJECT_ID --data-file=-
+### Step 2 — Create a desktop user password secret
 
-# Your Slack user ID (allows your DMs without any manual pairing)
-echo -n "U0YOURSLACKID" | gcloud secrets create slack-allowed-user-ids \
+This password is used for `sudo` inside the desktop (not for CRD login — CRD uses your Google account).
+
+```bash
+echo -n "your-sudo-password" | gcloud secrets create desktop-user-password \
   --project=YOUR_PROJECT_ID --data-file=-
 ```
 
-### Step 2 — Configure Pulumi
+### Step 3 — Store all secrets in GCP Secret Manager
 
 ```bash
-# Install dependencies
-npm install
+PROJECT=YOUR_PROJECT_ID
 
-# Create the dev stack (only needed once)
+# OpenRouter API key
+echo -n "sk-or-v1-YOUR-KEY" | gcloud secrets create openrouter-api-key \
+  --project=${PROJECT} --data-file=-
+
+# Slack bot token (xoxb-...)
+echo -n "xoxb-YOUR-BOT-TOKEN" | gcloud secrets create slack-bot-token \
+  --project=${PROJECT} --data-file=-
+
+# Slack app token (xapp-...)
+echo -n "xapp-YOUR-APP-TOKEN" | gcloud secrets create slack-app-token \
+  --project=${PROJECT} --data-file=-
+
+# Your Slack user ID(s) — comma-separated for multiple users
+echo -n "U0YOURSLACKID" | gcloud secrets create slack-allowed-user-ids \
+  --project=${PROJECT} --data-file=-
+
+# Desktop user sudo password (already done in Step 2)
+# echo -n "your-sudo-password" | gcloud secrets create desktop-user-password ...
+```
+
+**To add multiple Slack users:**
+```bash
+echo -n "U111AAA,U222BBB,U333CCC" | gcloud secrets versions add slack-allowed-user-ids \
+  --project=${PROJECT} --data-file=-
+```
+
+### Step 4 — Configure Pulumi
+
+```bash
+cd src/infra/vm-desktop
+npm install          # from repo root if not already done
 pulumi stack init dev
 ```
 
-Then edit `Pulumi.dev.yaml` with your values (this file is gitignored — never committed):
+Create `src/infra/vm-desktop/Pulumi.dev.yaml` with your values:
 
 ```yaml
 config:
-  gcp:project: YOUR_PROJECT_ID        # your GCP project ID
-  gcp:zone: us-central1-a             # change if you want a different zone
-  fire-infra:machineType: e2-medium   # change if you want a different machine size
-  fire-infra:instanceName: fire-vm    # change if you want a different VM name
-  fire-infra:startupScriptPath: src/infra/vms/scripts/vmstartup.sh
-  fire-infra:vmServiceAccountEmail: YOUR_SA_EMAIL  # the SA you created in prerequisite step 6
-  fire-infra:slackBotSecretName: slack-bot-token          # placeholder — matches the secret name you created in Step 1; only change if you used a different name
-  fire-infra:slackAppSecretName: slack-app-token          # placeholder — same as above
-  fire-infra:slackAllowedUserIdsSecretName: slack-allowed-user-ids  # placeholder — same as above
+  gcp:project: YOUR_PROJECT_ID          # e.g. my-gcp-project
+  gcp:zone: us-central1-a               # change to your preferred zone
+
+  fire-desktop:machineType: e2-standard-4    # 4 vCPU, 16GB RAM
+  fire-desktop:diskSizeGb: "50"              # GB — increase if you need more space
+  fire-desktop:instanceName: fire-desktop    # VM name in GCP console
+  fire-desktop:imageFamily: ubuntu-2204-lts  # Ubuntu 22.04 LTS (recommended)
+  fire-desktop:imageProject: ubuntu-os-cloud
+  fire-desktop:assignExternalIp: "true"      # needed for CRD and outbound internet
+  fire-desktop:startupScriptPath: scripts/vmdesktop-startup.sh
+
+  fire-desktop:vmServiceAccountEmail: fire-provisioner@YOUR_PROJECT_ID.iam.gserviceaccount.com
+
+  fire-desktop:desktopUsername: fire         # Linux username inside the desktop
+  fire-desktop:desktopUserPasswordSecretName: desktop-user-password  # secret name from Step 2
+
+  fire-desktop:openrouterSecretName: openrouter-api-key    # secret name from Step 3
+  fire-desktop:slackBotSecretName: slack-bot-token         # secret name from Step 3
+  fire-desktop:slackAppSecretName: slack-app-token         # secret name from Step 3
+  fire-desktop:slackAllowedUserIdsSecretName: slack-allowed-user-ids
+
+  fire-desktop:skillsRepoUrl: https://github.com/jbadhree/fire-skills.git  # or your fork
+  fire-desktop:nodeMajorVersion: "22"
+  fire-desktop:openclawVersion: 2026.3.13
+
+  fire-desktop:gcsBucketName: YOUR_BUCKET_NAME  # bucket created in Step 1
 ```
 
-> The three `slack*SecretName` values are just the **names** of the secrets in GCP Secret Manager, not the tokens themselves. If you used the exact `gcloud secrets create` commands in Step 1, you don't need to change these.
+> `encryptionsalt` is added automatically by `pulumi stack init` — do not add it manually.
 
-> `encryptionsalt` is added automatically by Pulumi the first time you run `pulumi stack init` — don't add it manually.
-
-### Step 3 — Deploy
+### Step 5 — Deploy
 
 ```bash
-pulumi up
+pulumi up -y --cwd src/infra/vm-desktop
 ```
 
-Pulumi creates the VM and grants it access to all secrets. First boot takes ~5 minutes (installs Node.js and OpenClaw). You can watch progress:
+Pulumi creates: the VM, IAM bindings on all secrets and the GCS bucket, and a firewall rule for SSH (IAP only).
 
+**Monitor the startup script** (~15-20 minutes on first boot):
 ```bash
-gcloud compute instances get-serial-port-output $(pulumi stack output vmName) \
-  --zone=$(pulumi stack output vmZone) --project=YOUR_PROJECT_ID 2>&1 | tail -20
+gcloud compute instances get-serial-port-output fire-desktop \
+  --zone=us-central1-a --project=YOUR_PROJECT_ID
 ```
 
-Wait until you see: `Startup script finished. Gateway running on port 18789.`
+Wait until you see: `[desktop-startup] ... Startup script finished.`
 
-### Step 4 — DM your bot in Slack
+### Step 6 — Set up Chrome Remote Desktop (one-time)
 
-Open Slack, find your bot (search by name), and send it a DM. It responds immediately — no SSH, no pairing, nothing else to do.
+This authorization links the VM to your Google account. After it's done once, CRD auth is stored in GCS and survives destroy/recreate.
+
+**1. Get the authorization command:**
+- Open [remotedesktop.google.com/headless](https://remotedesktop.google.com/headless) in your browser (signed in to your Google account)
+- Click **Begin** → **Authorize** → allow the permissions
+- Copy the full command shown (starts with `DISPLAY= /opt/google/chrome-remote-desktop/start-host ...`)
+
+**2. SSH into the VM:**
+```bash
+gcloud compute ssh fire-desktop \
+  --zone=us-central1-a \
+  --tunnel-through-iap \
+  --project=YOUR_PROJECT_ID
+```
+
+**3. Run the authorization command as your desktop user:**
+```bash
+sudo -u fire DISPLAY= /opt/google/chrome-remote-desktop/start-host \
+  --code="4/xxxx..." \
+  --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
+  --name=$(hostname)
+```
+Enter a **6-digit PIN** when prompted — you'll use this PIN every time you connect.
+
+**4. Connect:**
+- Open [remotedesktop.google.com](https://remotedesktop.google.com) on any device
+- Click **Remote Access** → click `fire-desktop`
+- Enter your 6-digit PIN
+
+Works on **Mac, iPhone, iPad, Android** — no VPN, no extra apps.
+
+### Step 7 — Access OpenClaw dashboard
+
+Once connected to the desktop, open **Firefox** and go to:
+```
+http://localhost:18789
+```
+
+---
+
+## Server VM (headless, Slack only)
+
+For a lighter-weight option without a desktop — OpenClaw accessible only via Slack.
+
+See **[docs/server-vm.md](docs/server-vm.md)** for full setup instructions.
 
 ---
 
 ## Day-to-day usage
 
-### Chat via Slack
-Just DM your bot. The VM and Slack connection are always on.
-
 ### Stop the VM (pause billing)
 ```bash
-gcloud compute instances stop $(pulumi stack output vmName) --zone=$(pulumi stack output vmZone) --project=YOUR_PROJECT_ID
+gcloud compute instances stop fire-desktop --zone=us-central1-a --project=YOUR_PROJECT_ID
 ```
-Compute billing pauses. Disk is retained (~$0.04/GB/month).
+Compute billing pauses. Disk and GCS data are retained.
 
 ### Start the VM again
 ```bash
-gcloud compute instances start $(pulumi stack output vmName) --zone=$(pulumi stack output vmZone) --project=YOUR_PROJECT_ID
+gcloud compute instances start fire-desktop --zone=us-central1-a --project=YOUR_PROJECT_ID
 ```
-OpenClaw and Slack come back up automatically in ~30 seconds.
+Everything comes back automatically (~2 min for subsequent boots). CRD reconnects without re-authorization.
 
-### Web dashboard (optional)
-If you want the browser UI at `http://localhost:18789`:
-
-**Step 1 — Get the dashboard URL with a valid token** (SSH into the VM):
+### Update secrets (e.g. rotate API key)
 ```bash
-gcloud compute ssh $(pulumi stack output vmName) --zone=$(pulumi stack output vmZone) --project=YOUR_PROJECT_ID \
-  --tunnel-through-iap --command='sudo -u openclaw HOME=/var/lib/openclaw npx openclaw dashboard --no-open'
+echo -n "sk-or-v1-NEW-KEY" | gcloud secrets versions add openrouter-api-key \
+  --project=YOUR_PROJECT_ID --data-file=-
 ```
-This prints a URL like `http://localhost:18789/#token=...` — copy the full URL including the `#token=...` part.
+Reboot the VM to apply: `gcloud compute instances reset fire-desktop --zone=us-central1-a`
 
-**Step 2 — Open a port-forwarding session:**
-```bash
-gcloud compute ssh $(pulumi stack output vmName) --zone=$(pulumi stack output vmZone) --project=YOUR_PROJECT_ID \
-  --tunnel-through-iap -- -L 18789:127.0.0.1:18789
+### Update OpenClaw version
+Change in `Pulumi.dev.yaml`:
+```yaml
+fire-desktop:openclawVersion: 2026.4.1
 ```
-Keep this session open.
+Then destroy and recreate: `pulumi destroy -y --cwd src/infra/vm-desktop && pulumi up -y --cwd src/infra/vm-desktop`
 
-**Step 3 — Open the URL** you copied in Step 1 in your browser. The token in the URL authenticates you — opening `http://localhost:18789` without it will fail.
-
-### Destroy and recreate
-```bash
-pulumi destroy && pulumi up
-```
-Everything rebuilds from scratch automatically. No manual steps needed after deploy.
+### Add a Slack channel
+Ask OpenClaw in Slack or the dashboard: *"Add channel C1234ABCD to OpenClaw"* — the `add-slack-channel` skill handles the config update and safe restart.
 
 ---
 
-## Configuration reference
+## What persists on GCS
 
-All config is set via `pulumi config set` or in `Pulumi.dev.yaml` (gitignored).
+All important data is stored in the GCS bucket — survives VM stop/start AND destroy/recreate:
+
+| Data | GCS path | What it is |
+|------|----------|------------|
+| OpenClaw config | `.openclaw/openclaw.json` | API keys, Slack tokens, channel policy |
+| OpenClaw memory | `.openclaw/memory/` | Conversation history and context |
+| Pairing data | `.openclaw/` | Device pairing tokens |
+| CRD auth | `.crd-config/` | Chrome Remote Desktop registration — no re-auth after recreate |
+
+**Only destroyed on `pulumi destroy` + manual bucket deletion.** Stop/start and destroy/recreate are both safe.
+
+---
+
+## Configuration reference — Desktop VM
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `gcp:project` | gcloud default | GCP project ID |
+| `gcp:project` | — | GCP project ID (required) |
 | `gcp:zone` | `us-central1-a` | VM zone |
-| `machineType` | `e2-medium` | VM size (4 GB RAM recommended minimum) |
-| `instanceName` | `fire-vm` | VM name |
-| `imageFamily` | `debian-12` | Boot disk OS |
-| `startupScriptPath` | — | Path to startup script (required) |
+| `machineType` | `e2-standard-4` | VM size |
+| `diskSizeGb` | `50` | Boot disk size in GB |
+| `instanceName` | `fire-desktop` | VM name |
+| `imageFamily` | `ubuntu-2204-lts` | OS image family |
+| `imageProject` | `ubuntu-os-cloud` | OS image project |
+| `assignExternalIp` | `true` | Needed for CRD and internet access |
 | `vmServiceAccountEmail` | default compute SA | SA the VM runs as |
-| `openrouterSecretName` | `openrouter-api-key` | Secret Manager secret name for OpenRouter key |
-| `slackBotSecretName` | — | Secret name for Slack bot token (`xoxb-...`) |
-| `slackAppSecretName` | — | Secret name for Slack app token (`xapp-...`) |
-| `slackAllowedUserIdsSecretName` | — | Secret name for comma-separated Slack user IDs |
+| `desktopUsername` | `fire` | Linux user created on first boot |
+| `desktopUserPasswordSecretName` | `desktop-user-password` | Secret for sudo password |
+| `openrouterSecretName` | `openrouter-api-key` | Secret for OpenRouter key |
+| `slackBotSecretName` | `slack-bot-token` | Secret for Slack bot token |
+| `slackAppSecretName` | `slack-app-token` | Secret for Slack app token |
+| `slackAllowedUserIdsSecretName` | `slack-allowed-user-ids` | Secret for allowed Slack user IDs |
+| `skillsRepoUrl` | `https://github.com/jbadhree/fire-skills.git` | Skills GitHub repo |
+| `nodeMajorVersion` | `22` | Node.js major version |
+| `openclawVersion` | `2026.3.13` | Pinned OpenClaw version |
+| `gcsBucketName` | — | GCS bucket name (required) |
 
 ---
 
 ## Troubleshooting
 
-### SSH times out / "connection timed out during banner exchange"
-
-The VM is likely overloaded. Check what's happening without SSH:
+### Startup script failed — check logs
 ```bash
-gcloud compute instances get-serial-port-output $(pulumi stack output vmName) \
-  --zone=$(pulumi stack output vmZone) --project=YOUR_PROJECT_ID 2>&1 | tail -30
+gcloud compute instances get-serial-port-output fire-desktop \
+  --zone=us-central1-a --project=YOUR_PROJECT_ID
 ```
-If out of memory, use a larger machine type: `pulumi config set machineType e2-medium`, then `pulumi destroy && pulumi up`.
 
-### OpenRouter secret empty or failed to fetch
+### SSH into the VM for debugging
+```bash
+gcloud compute ssh fire-desktop \
+  --zone=us-central1-a \
+  --tunnel-through-iap \
+  --project=YOUR_PROJECT_ID
+```
 
-The VM can't read the secret. Check it exists and the VM's service account has access:
+### Check OpenClaw service status
+```bash
+# From inside the VM or via SSH
+systemctl status openclaw-desktop
+journalctl -u openclaw-desktop -f
+```
+
+### `fire-desktop` doesn't appear on remotedesktop.google.com
+The one-time CRD authorization hasn't been done yet on this VM. Follow Step 6 of the setup.
+
+### Permission denied on GCS mount
+The VM's service account doesn't have `roles/storage.objectAdmin` on the bucket. Run `pulumi up` to re-apply IAM bindings, then reboot the VM.
+
+### Secret fetch failed
+The VM can't read a secret. Check it exists and the VM's SA has access:
 ```bash
 gcloud secrets list --project=YOUR_PROJECT_ID
 gcloud secrets get-iam-policy openrouter-api-key --project=YOUR_PROJECT_ID
 ```
-If the binding is missing, `pulumi up` will fix it (Pulumi manages the IAM bindings). Then recreate: `pulumi destroy && pulumi up`.
+Then run `pulumi up` (re-applies IAM) and reboot.
 
-### OpenClaw not responding in Slack after startup
-
-Wait ~1 minute after the VM starts — the gateway takes time to initialize and connect to Slack's Socket Mode. Check the service:
+### OpenClaw not responding in Slack
+Wait ~2 min after boot. Then check:
 ```bash
-gcloud compute ssh $(pulumi stack output vmName) --zone=$(pulumi stack output vmZone) --project=YOUR_PROJECT_ID \
-  --tunnel-through-iap --command='sudo systemctl status openclaw'
+# From inside the VM
+systemctl status openclaw-desktop
+curl http://localhost:18789/health
 ```
 
 ### 403 `iam.serviceAccounts.getAccessToken` denied (Pulumi deploy fails)
-
-This means the credentials you use to run Pulumi don't have permission to impersonate the service account. Simplest fix — run Pulumi as your user directly:
+Run Pulumi as your own Google account instead:
 ```bash
-gcloud auth application-default login   # logs in as your Google account
-pulumi up
+gcloud auth application-default login
+pulumi up -y --cwd src/infra/vm-desktop
 ```
-Or grant your service account `roles/iam.serviceAccountUser` on the project.
-
-### Connection refused on port 18789 (web dashboard)
-
-You need an active SSH session with port forwarding open. See the **Web dashboard** section above.

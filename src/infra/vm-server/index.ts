@@ -30,8 +30,6 @@ function findPulumiProjectRoot(): string {
 }
 
 function getStartupScript(config: pulumi.Config): string {
-  const inline = config.get("startupScript");
-  if (inline) return inline;
   const scriptPath = config.get("startupScriptPath");
   if (scriptPath) {
     const root = findPulumiProjectRoot();
@@ -53,39 +51,58 @@ const config = new pulumi.Config();
 const project = getGcpProject(config);
 const zone = config.get("gcp:zone") ?? "us-central1-a";
 const machineType = config.get("machineType") ?? "e2-medium";
+const diskSizeGb = config.getNumber("diskSizeGb") ?? 20;
 const instanceName = config.get("instanceName") ?? "fire-vm";
-const imageFamily = config.get("imageFamily") ?? "debian-12";
+
+// Ubuntu 22.04 LTS — consistent with vm-desktop, well-tested with gcsfuse.
+const imageFamily = config.get("imageFamily") ?? "ubuntu-2204-lts";
+const imageProject = config.get("imageProject") ?? "ubuntu-os-cloud";
+
 const assignExternalIp = config.getBoolean("assignExternalIp") ?? true;
 const vmServiceAccountEmail = config.get("vmServiceAccountEmail");
+
+// OpenClaw secrets.
 const openrouterSecretName = config.get("openrouterSecretName") ?? "openrouter-api-key";
-// Optional: Slack bot + app tokens stored in Secret Manager.
-// Leave unset to skip Slack setup. Set to enable fully-automated Slack channel.
 const slackBotSecretName = config.get("slackBotSecretName") ?? "";
 const slackAppSecretName = config.get("slackAppSecretName") ?? "";
-// Optional: name of a Secret Manager secret holding comma-separated Slack user IDs
-// allowed to DM the bot without pairing. e.g. secret value "U0AK770CMM0".
 const slackAllowedUserIdsSecretName = config.get("slackAllowedUserIdsSecretName") ?? "";
-// Tailscale auth key secret — allows the VM to join the tailnet automatically on boot.
-const tailscaleAuthKeySecretName = config.get("tailscaleAuthKeySecretName") ?? "tailscale-auth-key";
-// code-server (VS Code in browser) password secret.
-const codeServerPasswordSecretName = config.get("codeServerPasswordSecretName") ?? "code-server-password";
-// GCS bucket name for persistent OpenClaw data (config, memory, logs) via gcsfuse.
-const gcsBucketName = config.get("gcsBucketName") ?? "openclaw-data";
 
-// Inject project, secret names, and bucket name into startup script placeholders.
+// Skills repository cloned on first boot and pulled on every boot.
+const skillsRepoUrl =
+  config.get("skillsRepoUrl") ?? "https://github.com/jbadhree/fire-skills.git";
+
+// Runtime versions — pinned so the VM never auto-updates unexpectedly.
+const nodeMajorVersion = config.get("nodeMajorVersion") ?? "22";
+const openclawVersion = config.get("openclawVersion") ?? "2026.3.13";
+
+// GCS bucket for persistent OpenClaw data — survives VM destroy/recreate.
+// Managed by the fire-storage Pulumi program; only IAM is managed here.
+const gcsBucketName = config.require("gcsBucketName");
+
+// ── Tailscale (disabled — uncomment to re-enable) ────────────────────────────
+// const tailscaleAuthKeySecretName =
+//   config.get("tailscaleAuthKeySecretName") ?? "tailscale-auth-key";
+
+// ── code-server / VS Code in browser (disabled) ──────────────────────────────
+// const codeServerPasswordSecretName =
+//   config.get("codeServerPasswordSecretName") ?? "code-server-password";
+
+// Inject placeholders into startup script.
 let startupScriptContent = getStartupScript(config);
 if (startupScriptContent) {
   startupScriptContent = startupScriptContent
     .replace(/__PROJECT_ID__/g, project)
+    .replace(/__GCS_BUCKET_NAME__/g, gcsBucketName)
     .replace(/__OPENROUTER_SECRET_NAME__/g, openrouterSecretName)
     .replace(/__SLACK_BOT_SECRET_NAME__/g, slackBotSecretName)
     .replace(/__SLACK_APP_SECRET_NAME__/g, slackAppSecretName)
     .replace(/__SLACK_ALLOWED_USER_IDS_SECRET_NAME__/g, slackAllowedUserIdsSecretName)
-    .replace(/__TAILSCALE_AUTH_KEY_SECRET_NAME__/g, tailscaleAuthKeySecretName)
-    .replace(/__CODE_SERVER_PASSWORD_SECRET_NAME__/g, codeServerPasswordSecretName)
-    .replace(/__GCS_BUCKET_NAME__/g, gcsBucketName);
+    .replace(/__SKILLS_REPO_URL__/g, skillsRepoUrl)
+    .replace(/__NODE_MAJOR_VERSION__/g, nodeMajorVersion)
+    .replace(/__OPENCLAW_VERSION__/g, openclawVersion);
+  // .replace(/__TAILSCALE_AUTH_KEY_SECRET_NAME__/g, tailscaleAuthKeySecretName)
+  // .replace(/__CODE_SERVER_PASSWORD_SECRET_NAME__/g, codeServerPasswordSecretName)
 }
-const metadataStartupScript = startupScriptContent || undefined;
 
 // Project number (needed for default compute SA).
 const projectNumber = config.get("gcp:projectNumber") ?? (() => {
@@ -98,7 +115,6 @@ const projectNumber = config.get("gcp:projectNumber") ?? (() => {
   }
 })();
 
-// Grant a service account secretAccessor on a given secret.
 function grantSecretAccess(secretId: string, member: pulumi.Input<string>, name: string) {
   return new gcp.secretmanager.SecretIamMember(name, {
     project,
@@ -108,7 +124,6 @@ function grantSecretAccess(secretId: string, member: pulumi.Input<string>, name:
   });
 }
 
-// Build the list of principals that need secret access.
 const vmMembers: Array<pulumi.Input<string>> = [];
 if (vmServiceAccountEmail) {
   vmMembers.push(pulumi.interpolate`serviceAccount:${vmServiceAccountEmail}`);
@@ -117,14 +132,11 @@ if (projectNumber) {
   vmMembers.push(`serviceAccount:${projectNumber}-compute@developer.gserviceaccount.com`);
 }
 
-// GCS bucket is managed outside Pulumi (created once manually) so pulumi destroy never
-// touches it and pulumi up never conflicts with an existing bucket. Pulumi only manages
-// the IAM bindings on it, which are idempotent.
-// Create once: gcloud storage buckets create gs://<name> --project=<project> --location=US
+// GCS bucket IAM — grant the VM's service account objectAdmin on the bucket.
 const bucketIamBindings: gcp.storage.BucketIAMMember[] = [];
 for (const member of vmMembers) {
   const saLabel = typeof member === "string" ? member.split("@")[0].split(":")[1] : "vm-sa";
-  bucketIamBindings.push(new gcp.storage.BucketIAMMember(`bucket-access-${saLabel}`, {
+  bucketIamBindings.push(new gcp.storage.BucketIAMMember(`server-bucket-access-${saLabel}`, {
     bucket: gcsBucketName,
     role: "roles/storage.objectAdmin",
     member,
@@ -132,31 +144,33 @@ for (const member of vmMembers) {
 }
 
 // Grant each principal access to every required secret.
-const secretIamBindings: gcp.secretmanager.SecretIamMember[] = [];
 const secretNames = [
   openrouterSecretName,
   ...(slackBotSecretName ? [slackBotSecretName] : []),
   ...(slackAppSecretName ? [slackAppSecretName] : []),
   ...(slackAllowedUserIdsSecretName ? [slackAllowedUserIdsSecretName] : []),
-  tailscaleAuthKeySecretName,
-  codeServerPasswordSecretName,
+  // tailscaleAuthKeySecretName,      // disabled
+  // codeServerPasswordSecretName,    // disabled
 ];
+const secretIamBindings: gcp.secretmanager.SecretIamMember[] = [];
 for (const secretId of secretNames) {
   for (const member of vmMembers) {
     const saLabel = typeof member === "string" ? member.split("@")[0].split(":")[1] : "vm-sa";
-    secretIamBindings.push(grantSecretAccess(secretId, member, `secret-access-${secretId}-${saLabel}`));
+    secretIamBindings.push(
+      grantSecretAccess(secretId, member, `server-secret-access-${secretId}-${saLabel}`)
+    );
   }
 }
 
-const vm = new gcp.compute.Instance("vm", {
+const vm = new gcp.compute.Instance("server-vm", {
   name: instanceName,
   project,
   zone,
   machineType,
   bootDisk: {
     initializeParams: {
-      image: `debian-cloud/${imageFamily}`,
-      size: 10,
+      image: `${imageProject}/${imageFamily}`,
+      size: diskSizeGb,
     },
   },
   networkInterfaces: [
@@ -175,20 +189,20 @@ const vm = new gcp.compute.Instance("vm", {
     : {}),
   metadata: {
     "pulumi-managed": "true",
+    "enable-oslogin": "true",
   },
-  metadataStartupScript: metadataStartupScript,
-  tags: ["fire-infra", "ssh"],
+  metadataStartupScript: startupScriptContent || undefined,
+  tags: ["fire-server", "ssh"],
 }, { dependsOn: [...secretIamBindings, ...bucketIamBindings] });
 
-// Allow SSH (tcp/22) only via IAP tunnel — requires gcloud auth, never open to internet.
-const sshSourceRanges = ["35.235.240.0/20"]; // IAP CIDR for --tunnel-through-iap
+// Allow SSH (tcp/22) only via IAP tunnel — never open to the internet.
 const stack = pulumi.getStack();
-const sshRule = new gcp.compute.Firewall("allow-ssh", {
+const sshRule = new gcp.compute.Firewall("server-allow-ssh", {
   project,
-  name: `fire-infra-allow-ssh-${stack}`,
+  name: `fire-server-allow-ssh-${stack}`,
   network: "default",
   allows: [{ protocol: "tcp", ports: ["22"] }],
-  sourceRanges: sshSourceRanges,
+  sourceRanges: ["35.235.240.0/20"], // IAP CIDR for --tunnel-through-iap
   targetTags: ["ssh"],
 });
 

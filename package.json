@@ -2,7 +2,7 @@
   "name": "fire-infra",
   "version": "0.1.0",
   "description": "Pulumi infrastructure for GCP",
-  "main": "src/infra/vms/index.ts",
+  "main": "index.ts",
   "scripts": {
     "build": "tsc",
     "preview": "pulumi preview",

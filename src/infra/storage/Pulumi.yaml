@@ -1,0 +1,4 @@
+name: fire-storage
+runtime: nodejs
+description: GCS bucket for persistent OpenClaw data (config, memory, logs)
+main: index.ts

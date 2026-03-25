@@ -1,0 +1,5 @@
+name: fire-setup
+runtime: nodejs
+description: One-time GCP project bootstrap — enables APIs, creates provisioner service account, grants IAM roles
+main: index.ts
+

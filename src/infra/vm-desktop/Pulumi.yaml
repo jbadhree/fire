@@ -1,0 +1,4 @@
+name: fire-desktop
+runtime: nodejs
+description: GCP Ubuntu Desktop VM with XFCE4, accessible via Chrome Remote Desktop
+main: index.ts
