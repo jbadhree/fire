@@ -1,0 +1,3 @@
+[submodule "src/skills"]
+	path = src/skills
+	url = https://github.com/jbadhree/fire-skills.git
