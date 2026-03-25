@@ -6,3 +6,5 @@ Pulumi.*.yaml
 *.log
 
 SETUP.md
+
+storage-old-state.json
