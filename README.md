@@ -3,8 +3,8 @@
 Run [OpenClaw](https://docs.openclaw.ai) — an open-source personal AI assistant — on a **GCP Compute Engine VM**, fully automated with Pulumi.
 
 Two deployment modes:
-- **Desktop VM** (`fire-desktop`) — Ubuntu desktop you remote into via **Chrome Remote Desktop**, with OpenClaw running inside it. Access from any device (Mac, iPhone, iPad, Android) using your Google account. All data persists on GCS.
-- **Server VM** (`fire-vm`) — Headless VM, chat via **Slack** from anywhere with no SSH needed.
+- **Desktop VM** (`fire-desktop`) — Ubuntu desktop accessible via **Chrome Remote Desktop** from any device (Mac, iPhone, iPad, Android). OpenClaw runs inside it. All data persists on GCS.
+- **Server VM** (`fire-vm`) — Headless VM, chat via **Slack** from anywhere. See [docs/server-vm.md](docs/server-vm.md).
 
 ---
 
@@ -22,13 +22,6 @@ Two deployment modes:
 │    └── Slack           → Socket Mode (outbound only)    │
 └─────────────────────────────────────────────────────────┘
 
-┌─────────────────────────────────────────────────────────┐
-│  fire-vm (server, headless)                             │
-│                                                         │
-│  OpenClaw gateway (port 18789)                          │
-│    └── Slack ──▶ Slack API ──▶ OpenRouter ──▶ Claude   │
-└─────────────────────────────────────────────────────────┘
-
 Both VMs read credentials from GCP Secret Manager.
 OpenClaw skills are loaded from a public GitHub repo (fire-skills).
 ```
@@ -40,84 +33,33 @@ OpenClaw skills are loaded from a public GitHub repo (fire-skills).
 ```
 src/
   infra/
-    setup/                         ← run this first (one-time bootstrap)
-      Pulumi.yaml                  Project definition
-      Pulumi.dev.yaml              Stack config (gitignored)
-      index.ts                     Enables APIs, creates SA, grants IAM roles
-    storage/
-      Pulumi.yaml                  GCS bucket Pulumi program definition
-      Pulumi.dev.yaml              Stack config (gitignored)
-      index.ts                     Pulumi: GCS bucket + versioning
-    vm-desktop/
-      Pulumi.yaml                  Desktop VM Pulumi program definition
-      Pulumi.dev.yaml              Stack config (gitignored)
-      index.ts                     Pulumi: VM, IAM bindings, firewall
-      scripts/
-        vmdesktop-startup.sh       Startup script: install, configure, start
-    vm-server/
-      Pulumi.yaml                  Server VM Pulumi program definition
-      Pulumi.dev.yaml              Stack config (gitignored)
-      index.ts                     Pulumi: VM, IAM bindings, firewall
-      scripts/
-        vmstartup.sh               Startup script: install, configure, start
-  skills/                          Git submodule → fire-skills repo
+    setup/          ← run this first (one-time bootstrap per project)
+    storage/        ← GCS bucket for persistent data
+    vm-desktop/     ← Ubuntu desktop VM with Chrome Remote Desktop
+    vm-server/      ← Headless server VM (Slack only)
 docs/
-  server-vm.md                     Setup guide for the headless server VM
+  server-vm.md      ← Setup guide for the server VM
 ```
 
 ---
 
 ## Prerequisites
 
-### 1. Tools
-
-Install on your local machine:
+### 1. Install tools (macOS)
 
 ```bash
-# macOS
 brew install --cask google-cloud-sdk
 brew install pulumi
 brew install node
-
-# Verify
-gcloud version
-pulumi version
-node --version
 ```
 
-### 2. GCP account and project
+### 2. GCP — create project and enable billing
 
-These are the **only two manual steps** in GCP — everything else is automated by the `setup` Pulumi program below.
-
-1. Go to [console.cloud.google.com](https://console.cloud.google.com) and create an account
-2. Create a new project (note your `PROJECT_ID`)
-3. **Enable billing** on the project (required for Compute Engine — [instructions](https://cloud.google.com/billing/docs/how-to/modify-project))
-
-Then authenticate your local machine:
-```bash
-gcloud auth login
-gcloud auth application-default login
-gcloud config set project YOUR_PROJECT_ID
-```
-
-**Run the setup program** — this enables all required APIs, creates the provisioner service account, and grants it the roles it needs:
-
-```bash
-# Edit src/infra/setup/Pulumi.dev.yaml and set gcp:project: YOUR_PROJECT_ID
-npm install
-pulumi stack init dev --cwd src/infra/setup
-pulumi up -y --cwd src/infra/setup
-```
-
-It enables these APIs: `compute`, `secretmanager`, `iam`, `iamcredentials`, `storage`, `cloudresourcemanager`, `iap`, `oslogin`.
-
-It creates a service account `fire-provisioner@YOUR_PROJECT_ID.iam.gserviceaccount.com` with roles: `compute.admin`, `secretmanager.admin`, `storage.admin`, `iam.serviceAccountUser`, `browser`.
-
-Copy the `serviceAccountEmail` output — you'll paste it into each program's `Pulumi.dev.yaml` as `vmServiceAccountEmail`.
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) → create an account and a new project
+2. Note your `PROJECT_ID`
+3. **Enable billing** on the project ([instructions](https://cloud.google.com/billing/docs/how-to/modify-project)) — required for Compute Engine
 
 ### 3. OpenRouter account
-
-OpenRouter is an API aggregator — one key routes to Claude, GPT-4, Gemini, and hundreds of other models.
 
 1. Sign up at [openrouter.ai](https://openrouter.ai) (free)
 2. Go to **Keys** → **Create Key** → copy the key (starts with `sk-or-v1-...`)
@@ -126,12 +68,11 @@ OpenRouter is an API aggregator — one key routes to Claude, GPT-4, Gemini, and
 ### 4. Slack workspace and app
 
 **Create a workspace** (skip if you already have one):
-1. Go to [slack.com](https://slack.com) → **Create a new workspace** (free plan works)
+- Go to [slack.com](https://slack.com) → **Create a new workspace** (free plan works)
 
 **Create the Slack app:**
 1. Go to [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From a manifest**
-2. Select your workspace
-3. Paste this manifest:
+2. Select your workspace and paste this manifest:
 
 ```json
 {
@@ -164,56 +105,79 @@ OpenRouter is an API aggregator — one key routes to Claude, GPT-4, Gemini, and
 }
 ```
 
-4. Click **Next** → **Create**
-5. **OAuth & Permissions** → **Install to Workspace** → **Allow** → copy the **Bot Token** (`xoxb-...`)
-6. **Settings → Basic Information → App-Level Tokens** → **Generate Token and Scopes** → add scope `connections:write` → copy the **App Token** (`xapp-...`)
-7. **Settings → Socket Mode** → enable it
+3. Click **Next** → **Create**
+4. **OAuth & Permissions** → **Install to Workspace** → **Allow** → copy the **Bot Token** (`xoxb-...`)
+5. **Settings → Basic Information → App-Level Tokens** → **Generate Token and Scopes** → add scope `connections:write` → copy the **App Token** (`xapp-...`)
+6. **Settings → Socket Mode** → enable it
 
-**Find your Slack user ID** (to allow yourself to DM the bot):
+**Find your Slack user ID:**
 - Click your profile picture → **Profile** → **⋮** → **Copy member ID** (starts with `U...`)
-- For multiple users: `U111AAA,U222BBB,U333CCC` (comma-separated)
-
-### 5. Skills repository
-
-OpenClaw loads skills from a public GitHub repository. The default is [jbadhree/fire-skills](https://github.com/jbadhree/fire-skills).
-
-To use your own:
-1. Fork the repo or create a new one with the same structure
-2. Update `skillsRepoUrl` in your `Pulumi.dev.yaml` (see below)
+- Multiple users: `U111AAA,U222BBB` (comma-separated)
 
 ---
 
-## Setup — Desktop VM (recommended)
+## Setup — step by step
 
-The desktop VM gives you a full Ubuntu desktop accessible from any device via Chrome Remote Desktop, with OpenClaw running inside it.
-
-### Step 1 — Create GCS bucket for persistent storage
-
-The bucket stores all OpenClaw data (config, memory, pairing) and Chrome Remote Desktop auth so it survives VM destroy/recreate.
+### Step 1 — Clone repo and install dependencies
 
 ```bash
-# Initialize and deploy the storage program (only once, ever)
-cd src/infra/storage
-pulumi stack init dev
+git clone https://github.com/jbadhree/fire.git
+cd fire
+npm install
+```
+
+### Step 2 — Authenticate gcloud
+
+```bash
+gcloud auth login
+gcloud auth application-default login
+gcloud config set project YOUR_PROJECT_ID
+```
+
+### Step 3 — Bootstrap GCP (one-time per project)
+
+This enables all required APIs, creates a provisioner service account, and grants it the IAM roles it needs.
+
+Edit `src/infra/setup/Pulumi.dev.yaml` — set your project ID:
+```yaml
+config:
+  gcp:project: YOUR_PROJECT_ID
+  fire-setup:serviceAccountName: fire-provisioner
+  fire-setup:serviceAccountDisplayName: Fire infrastructure provisioner
+```
+
+Then run:
+```bash
+pulumi stack init dev --cwd src/infra/setup
+pulumi up -y --cwd src/infra/setup
+```
+
+> **Note:** If you see `error: stack 'dev' already exists` — you've run this before. Skip `stack init` and go straight to `pulumi up`.
+
+From the output, copy the `serviceAccountEmail` value — you'll need it in later steps.
+
+APIs enabled: `compute`, `secretmanager`, `iam`, `iamcredentials`, `storage`, `cloudresourcemanager`, `iap`, `oslogin`.
+
+### Step 4 — Create GCS bucket for persistent storage
+
+The bucket stores all OpenClaw data (config, memory, pairing) and Chrome Remote Desktop auth — everything survives VM stop/start and destroy/recreate.
+
+Edit `src/infra/storage/Pulumi.dev.yaml`:
+```yaml
+config:
+  gcp:project: YOUR_PROJECT_ID
+  fire-storage:gcsBucketName: YOUR_UNIQUE_BUCKET_NAME   # globally unique, e.g. yourname-openclaw-data
+  fire-storage:location: US
+```
+
+> Bucket names are globally unique across all GCP. If the name is taken you'll get an error — just pick a different name.
+
+```bash
+pulumi stack init dev --cwd src/infra/storage
 pulumi up -y --cwd src/infra/storage
 ```
 
-Or create the bucket manually:
-```bash
-gcloud storage buckets create gs://YOUR_BUCKET_NAME \
-  --location=US --project=YOUR_PROJECT_ID
-```
-
-### Step 2 — Create a desktop user password secret
-
-This password is used for `sudo` inside the desktop (not for CRD login — CRD uses your Google account).
-
-```bash
-echo -n "your-sudo-password" | gcloud secrets create desktop-user-password \
-  --project=YOUR_PROJECT_ID --data-file=-
-```
-
-### Step 3 — Store all secrets in GCP Secret Manager
+### Step 5 — Store secrets in GCP Secret Manager
 
 ```bash
 PROJECT=YOUR_PROJECT_ID
@@ -234,67 +198,61 @@ echo -n "xapp-YOUR-APP-TOKEN" | gcloud secrets create slack-app-token \
 echo -n "U0YOURSLACKID" | gcloud secrets create slack-allowed-user-ids \
   --project=${PROJECT} --data-file=-
 
-# Desktop user sudo password (already done in Step 2)
-# echo -n "your-sudo-password" | gcloud secrets create desktop-user-password ...
-```
-
-**To add multiple Slack users:**
-```bash
-echo -n "U111AAA,U222BBB,U333CCC" | gcloud secrets versions add slack-allowed-user-ids \
+# Desktop user sudo password (any password — used for sudo inside the VM, not for CRD login)
+echo -n "your-sudo-password" | gcloud secrets create desktop-user-password \
   --project=${PROJECT} --data-file=-
 ```
 
-### Step 4 — Configure Pulumi
+### Step 6 — Configure the desktop VM
 
-```bash
-cd src/infra/vm-desktop
-npm install          # from repo root if not already done
-pulumi stack init dev
-```
-
-Create `src/infra/vm-desktop/Pulumi.dev.yaml` with your values:
+Edit `src/infra/vm-desktop/Pulumi.dev.yaml` — replace the three placeholder values:
 
 ```yaml
 config:
-  gcp:project: YOUR_PROJECT_ID          # e.g. my-gcp-project
-  gcp:zone: us-central1-a               # change to your preferred zone
+  gcp:project: YOUR_PROJECT_ID           # ← your project ID
+  gcp:zone: us-central1-a
 
-  fire-desktop:machineType: e2-standard-4    # 4 vCPU, 16GB RAM
-  fire-desktop:diskSizeGb: "50"              # GB — increase if you need more space
-  fire-desktop:instanceName: fire-desktop    # VM name in GCP console
-  fire-desktop:imageFamily: ubuntu-2204-lts  # Ubuntu 22.04 LTS (recommended)
+  fire-desktop:machineType: e2-standard-4
+  fire-desktop:diskSizeGb: "50"
+  fire-desktop:instanceName: fire-desktop
+  fire-desktop:imageFamily: ubuntu-2204-lts
   fire-desktop:imageProject: ubuntu-os-cloud
-  fire-desktop:assignExternalIp: "true"      # needed for CRD and outbound internet
+  fire-desktop:assignExternalIp: "true"
   fire-desktop:startupScriptPath: scripts/vmdesktop-startup.sh
 
-  fire-desktop:vmServiceAccountEmail: fire-provisioner@YOUR_PROJECT_ID.iam.gserviceaccount.com
+  fire-desktop:vmServiceAccountEmail: fire-provisioner@YOUR_PROJECT_ID.iam.gserviceaccount.com  # ← from Step 3 output
 
-  fire-desktop:desktopUsername: fire         # Linux username inside the desktop
-  fire-desktop:desktopUserPasswordSecretName: desktop-user-password  # secret name from Step 2
-
-  fire-desktop:openrouterSecretName: openrouter-api-key    # secret name from Step 3
-  fire-desktop:slackBotSecretName: slack-bot-token         # secret name from Step 3
-  fire-desktop:slackAppSecretName: slack-app-token         # secret name from Step 3
+  fire-desktop:desktopUsername: fire
+  fire-desktop:desktopUserPasswordSecretName: desktop-user-password
+  fire-desktop:openrouterSecretName: openrouter-api-key
+  fire-desktop:slackBotSecretName: slack-bot-token
+  fire-desktop:slackAppSecretName: slack-app-token
   fire-desktop:slackAllowedUserIdsSecretName: slack-allowed-user-ids
 
-  fire-desktop:skillsRepoUrl: https://github.com/jbadhree/fire-skills.git  # or your fork
+  fire-desktop:skillsRepoUrl: https://github.com/jbadhree/fire-skills.git
   fire-desktop:nodeMajorVersion: "22"
   fire-desktop:openclawVersion: 2026.3.13
 
-  fire-desktop:gcsBucketName: YOUR_BUCKET_NAME  # bucket created in Step 1
+  fire-desktop:gcsBucketName: YOUR_UNIQUE_BUCKET_NAME   # ← same bucket name as Step 4
 ```
 
-> `encryptionsalt` is added automatically by `pulumi stack init` — do not add it manually.
+> `encryptionsalt` is added automatically by `pulumi stack init` — do not add it manually. **Never delete it** from the file after it's been added.
 
-### Step 5 — Deploy
+> **Tip:** Set `PULUMI_CONFIG_PASSPHRASE` as an env var to avoid being prompted for it on every command:
+> ```bash
+> export PULUMI_CONFIG_PASSPHRASE="your-passphrase"
+> ```
+
+### Step 7 — Deploy the desktop VM
 
 ```bash
+pulumi stack init dev --cwd src/infra/vm-desktop
 pulumi up -y --cwd src/infra/vm-desktop
 ```
 
-Pulumi creates: the VM, IAM bindings on all secrets and the GCS bucket, and a firewall rule for SSH (IAP only).
+Pulumi creates the VM, IAM bindings on all secrets and the GCS bucket, and a firewall rule for SSH (IAP only).
 
-**Monitor the startup script** (~15-20 minutes on first boot):
+**Monitor first boot** (~15-20 minutes):
 ```bash
 gcloud compute instances get-serial-port-output fire-desktop \
   --zone=us-central1-a --project=YOUR_PROJECT_ID
@@ -302,14 +260,14 @@ gcloud compute instances get-serial-port-output fire-desktop \
 
 Wait until you see: `[desktop-startup] ... Startup script finished.`
 
-### Step 6 — Set up Chrome Remote Desktop (one-time)
+### Step 8 — Set up Chrome Remote Desktop (one-time)
 
-This authorization links the VM to your Google account. After it's done once, CRD auth is stored in GCS and survives destroy/recreate.
+This authorization links the VM to your Google account. Once done, it's stored in GCS and survives VM destroy/recreate — you won't need to do this again.
 
 **1. Get the authorization command:**
 - Open [remotedesktop.google.com/headless](https://remotedesktop.google.com/headless) in your browser (signed in to your Google account)
 - Click **Begin** → **Authorize** → allow the permissions
-- Copy the full command shown (starts with `DISPLAY= /opt/google/chrome-remote-desktop/start-host ...`)
+- Copy the full `start-host` command shown on the page
 
 **2. SSH into the VM:**
 ```bash
@@ -319,36 +277,31 @@ gcloud compute ssh fire-desktop \
   --project=YOUR_PROJECT_ID
 ```
 
-**3. Run the authorization command as your desktop user:**
+**3. Run the command as your desktop user:**
 ```bash
 sudo -u fire DISPLAY= /opt/google/chrome-remote-desktop/start-host \
   --code="4/xxxx..." \
   --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
   --name=$(hostname)
 ```
-Enter a **6-digit PIN** when prompted — you'll use this PIN every time you connect.
+Enter a **6-digit PIN** when prompted — you'll use this every time you connect.
 
-**4. Connect:**
-- Open [remotedesktop.google.com](https://remotedesktop.google.com) on any device
-- Click **Remote Access** → click `fire-desktop`
+**4. Connect from any device:**
+- Open [remotedesktop.google.com](https://remotedesktop.google.com) → **Remote Access** → click `fire-desktop`
 - Enter your 6-digit PIN
 
-Works on **Mac, iPhone, iPad, Android** — no VPN, no extra apps.
+Works on **Mac, iPhone, iPad, Android** — no VPN needed.
 
-### Step 7 — Access OpenClaw dashboard
+### Step 9 — Verify OpenClaw is running
 
-Once connected to the desktop, open **Firefox** and go to:
+After the startup script finishes, OpenClaw takes ~1-2 minutes to fully initialize. Check from inside the VM (via SSH or CRD terminal):
+
+```bash
+systemctl status openclaw-desktop
+curl http://localhost:18789/health
 ```
-http://localhost:18789
-```
 
----
-
-## Server VM (headless, Slack only)
-
-For a lighter-weight option without a desktop — OpenClaw accessible only via Slack.
-
-See **[docs/server-vm.md](docs/server-vm.md)** for full setup instructions.
+Or from the CRD desktop session, open **Firefox** and go to `http://localhost:18789`.
 
 ---
 
@@ -364,39 +317,133 @@ Compute billing pauses. Disk and GCS data are retained.
 ```bash
 gcloud compute instances start fire-desktop --zone=us-central1-a --project=YOUR_PROJECT_ID
 ```
-Everything comes back automatically (~2 min for subsequent boots). CRD reconnects without re-authorization.
+OpenClaw comes back automatically in ~2 minutes. CRD reconnects without re-authorization.
 
-### Update secrets (e.g. rotate API key)
+> OpenClaw takes ~1-2 min after the VM starts before it's fully ready. If Slack doesn't respond immediately, wait a moment and try again.
+
+### SSH into the VM
+```bash
+gcloud compute ssh fire-desktop \
+  --zone=us-central1-a \
+  --tunnel-through-iap \
+  --project=YOUR_PROJECT_ID
+```
+
+### Check OpenClaw logs
+```bash
+# Live service logs
+journalctl -u openclaw-desktop -f
+
+# Startup script log
+sudo cat /tmp/desktop-startup.log
+```
+
+### Update a secret (e.g. rotate API key)
 ```bash
 echo -n "sk-or-v1-NEW-KEY" | gcloud secrets versions add openrouter-api-key \
   --project=YOUR_PROJECT_ID --data-file=-
 ```
-Reboot the VM to apply: `gcloud compute instances reset fire-desktop --zone=us-central1-a`
+Reboot to apply:
+```bash
+gcloud compute instances reset fire-desktop --zone=us-central1-a --project=YOUR_PROJECT_ID
+```
 
 ### Update OpenClaw version
 Change in `Pulumi.dev.yaml`:
 ```yaml
 fire-desktop:openclawVersion: 2026.4.1
 ```
-Then destroy and recreate: `pulumi destroy -y --cwd src/infra/vm-desktop && pulumi up -y --cwd src/infra/vm-desktop`
+Then redeploy: `pulumi destroy -y --cwd src/infra/vm-desktop && pulumi up -y --cwd src/infra/vm-desktop`
 
-### Add a Slack channel
-Ask OpenClaw in Slack or the dashboard: *"Add channel C1234ABCD to OpenClaw"* — the `add-slack-channel` skill handles the config update and safe restart.
+---
+
+## Teardown
+
+Destroy in this order — VM first, then storage, then setup:
+
+```bash
+# 1. Delete the VM (safe — GCS data is unaffected)
+pulumi destroy -y --cwd src/infra/vm-desktop
+
+# 2. Delete the GCS bucket and ALL its data (OpenClaw config, memory, CRD auth)
+pulumi destroy -y --cwd src/infra/storage
+
+# 3. Remove service account and IAM roles (optional — harmless to leave)
+pulumi destroy -y --cwd src/infra/setup
+```
+
+> The GCS bucket has `forceDestroy: true` — `pulumi destroy` will delete all objects in it. This is permanent. If you want to keep your OpenClaw data, download it first:
+> ```bash
+> gcloud storage cp -r gs://YOUR_BUCKET_NAME ./openclaw-backup
+> ```
+
+> `pulumi destroy` on setup removes the service account and IAM bindings but does **not** disable APIs (`disableOnDestroy: false`) — disabling APIs could break other things in the project.
+
+---
+
+## Working from a different machine
+
+Pulumi state is stored in Pulumi Cloud (linked to your account) by default — not locally. So if you're using Pulumi Cloud, you can just clone the repo on the new machine, install tools, authenticate gcloud, and run `pulumi up` or `pulumi destroy` directly.
+
+If you're using **local state** (passphrase-based), you need to transfer the state:
+
+```bash
+# On current machine — export all three stacks
+pulumi stack export --cwd src/infra/setup   > setup-state.json
+pulumi stack export --cwd src/infra/storage > storage-state.json
+pulumi stack export --cwd src/infra/vm-desktop > vm-desktop-state.json
+```
+
+Copy the JSON files and the `Pulumi.dev.yaml` files to the new machine, then:
+
+```bash
+export PULUMI_CONFIG_PASSPHRASE="your-passphrase"
+
+pulumi stack import --cwd src/infra/setup   < setup-state.json
+pulumi stack import --cwd src/infra/storage < storage-state.json
+pulumi stack import --cwd src/infra/vm-desktop < vm-desktop-state.json
+```
+
+---
+
+## Moving to a new GCP project
+
+If you have existing Pulumi state pointing at an old project and want to redeploy in a new one:
+
+1. Export state (backup):
+```bash
+pulumi stack export --cwd src/infra/vm-desktop > vm-desktop-old-state.json
+```
+
+2. Update `Pulumi.dev.yaml` files with the new project ID and service account email
+
+3. Refresh to clear stale state (removes old project's resources from state):
+```bash
+export PULUMI_CONFIG_PASSPHRASE="your-passphrase"
+pulumi refresh -y --cwd src/infra/vm-desktop
+```
+
+4. Deploy fresh:
+```bash
+pulumi up -y --cwd src/infra/vm-desktop
+```
+
+> **Important:** Never delete `encryptionsalt` from `Pulumi.dev.yaml` when editing it — Pulumi needs it to decrypt the stack's secrets. If you accidentally lose it, import the exported state JSON to restore it.
 
 ---
 
 ## What persists on GCS
 
-All important data is stored in the GCS bucket — survives VM stop/start AND destroy/recreate:
+All important data lives in the GCS bucket — survives stop/start AND destroy/recreate:
 
 | Data | GCS path | What it is |
 |------|----------|------------|
 | OpenClaw config | `.openclaw/openclaw.json` | API keys, Slack tokens, channel policy |
 | OpenClaw memory | `.openclaw/memory/` | Conversation history and context |
 | Pairing data | `.openclaw/` | Device pairing tokens |
-| CRD auth | `.crd-config/` | Chrome Remote Desktop registration — no re-auth after recreate |
+| CRD auth | `.crd-config/` | Chrome Remote Desktop registration |
 
-**Only destroyed on `pulumi destroy` + manual bucket deletion.** Stop/start and destroy/recreate are both safe.
+**Only permanently deleted by `pulumi destroy --cwd src/infra/storage`.**
 
 ---
 
@@ -428,52 +475,56 @@ All important data is stored in the GCS bucket — survives VM stop/start AND de
 
 ## Troubleshooting
 
-### Startup script failed — check logs
+### `error: stack 'dev' already exists` on `pulumi stack init`
+The stack was already initialized. Skip `pulumi stack init` and run `pulumi up` directly.
+
+### Pulumi keeps prompting for passphrase
+Set it as an environment variable:
+```bash
+export PULUMI_CONFIG_PASSPHRASE="your-passphrase"
+```
+
+### Startup script failed
 ```bash
 gcloud compute instances get-serial-port-output fire-desktop \
   --zone=us-central1-a --project=YOUR_PROJECT_ID
 ```
+Look for `FAILED at line` in the output.
 
-### SSH into the VM for debugging
+### OpenClaw not responding (health check fails)
+OpenClaw takes ~1-2 minutes after the VM boots to fully initialize. Wait, then:
 ```bash
-gcloud compute ssh fire-desktop \
-  --zone=us-central1-a \
-  --tunnel-through-iap \
-  --project=YOUR_PROJECT_ID
-```
-
-### Check OpenClaw service status
-```bash
-# From inside the VM or via SSH
 systemctl status openclaw-desktop
-journalctl -u openclaw-desktop -f
+journalctl -u openclaw-desktop --no-pager | tail -30
+curl http://localhost:18789/health
 ```
 
 ### `fire-desktop` doesn't appear on remotedesktop.google.com
-The one-time CRD authorization hasn't been done yet on this VM. Follow Step 6 of the setup.
+The one-time CRD authorization hasn't been done yet. Follow Step 8.
 
 ### Permission denied on GCS mount
-The VM's service account doesn't have `roles/storage.objectAdmin` on the bucket. Run `pulumi up` to re-apply IAM bindings, then reboot the VM.
+```bash
+pulumi up -y --cwd src/infra/vm-desktop   # re-applies IAM bindings
+gcloud compute instances reset fire-desktop --zone=us-central1-a --project=YOUR_PROJECT_ID
+```
 
 ### Secret fetch failed
-The VM can't read a secret. Check it exists and the VM's SA has access:
 ```bash
 gcloud secrets list --project=YOUR_PROJECT_ID
 gcloud secrets get-iam-policy openrouter-api-key --project=YOUR_PROJECT_ID
 ```
-Then run `pulumi up` (re-applies IAM) and reboot.
-
-### OpenClaw not responding in Slack
-Wait ~2 min after boot. Then check:
-```bash
-# From inside the VM
-systemctl status openclaw-desktop
-curl http://localhost:18789/health
-```
+Then `pulumi up` to re-apply IAM, then reboot.
 
 ### 403 `iam.serviceAccounts.getAccessToken` denied (Pulumi deploy fails)
-Run Pulumi as your own Google account instead:
 ```bash
 gcloud auth application-default login
+pulumi up -y --cwd src/infra/vm-desktop
+```
+
+### Moving to a new GCP project causes errors on `pulumi up`
+Old state has resources from the previous project. Export state, refresh, then up:
+```bash
+pulumi stack export --cwd src/infra/vm-desktop > backup.json
+pulumi refresh -y --cwd src/infra/vm-desktop
 pulumi up -y --cwd src/infra/vm-desktop
 ```
