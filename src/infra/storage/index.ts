@@ -65,9 +65,10 @@ const bucket = new gcp.storage.Bucket("openclaw-data", {
   // Do not allow public access to the bucket.
   publicAccessPrevention: "enforced",
 
-  // forceDestroy: false (default) — pulumi destroy will refuse to delete a
-  // non-empty bucket, protecting your data. Set to true only if you are sure.
-  forceDestroy: false,
+  // forceDestroy: true — allows `pulumi destroy` to delete the bucket even
+  // when it contains objects. All OpenClaw data (config, memory, logs) will be
+  // permanently deleted. Set to false if you want to protect data on destroy.
+  forceDestroy: true,
 });
 
 export const name = bucket.name;

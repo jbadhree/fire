@@ -1,4 +1,0 @@
-name: fire-infra
-runtime: nodejs
-description: GCP infrastructure (VMs and more)
-main: src/infra/vms/index.ts
